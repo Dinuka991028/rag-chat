@@ -169,4 +169,4 @@ Beans:
 
 For official RAG examples with MongoDB, see the [MongoDB developer tutorial linked from Spring AI’s MongoDB vector docs](https://docs.spring.io/spring-ai/reference/api/vectordbs/mongodb.html).
 
-**Hands-on sequence:** follow **`IMPLEMENTATION_GUIDE.md`** in the same folder for phased steps (Maven, config, entities, custom `VectorStore`, RAG service, profiles, cleanup).
+**Project briefing:** see **`PROJECT_OVERVIEW.md`** for how the system works and how to swap LLMs for stakeholders; **`ARCHITECTURE.md`** for technical structure.

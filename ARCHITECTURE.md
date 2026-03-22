@@ -2,6 +2,8 @@
 
 This document describes the **technology stack**, **layered architecture**, and **request/data flow** of the `ai-chat` Spring Boot application: a Bahrain **Small Ship Registry Portal (SSRP)**–themed chat API that can answer with plain LLM calls or with **RAG** (retrieval-augmented generation) over a MongoDB knowledge base.
 
+For a **lead/PM-oriented** overview (how the system works, how to swap LLMs, env vars), see **`PROJECT_OVERVIEW.md`**.
+
 ---
 
 ## Technology stack
@@ -37,7 +39,7 @@ The app follows a classic **Spring MVC** layout:
 ```
 HTTP (JSON/text)
     → ChatController
-        → AIService (interface)
+        → ChatService (interface)
             → LlmChatService
                 → ChatModel (Spring AI — provider from config) + VectorStore (LocalMongoVectorStore)
                 → MongoTemplate / KnowledgeDocumentRepository → MongoDB
@@ -60,7 +62,7 @@ Supporting pieces:
 | `domain.KnowledgeDocument` | Typed Mongo entity for **`kb_documents`** |
 | `repository.KnowledgeDocumentRepository` | `MongoRepository` for KB CRUD |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
-| `service.AIService` | Contract: `askAI`, `askAIWithContext` |
+| `service.ChatService` | Contract: `askAI`, `askAIWithContext` |
 | `service.impl.LlmChatService` | **`ChatModel`** only (no provider imports) + RAG via **`VectorStore`** |
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
 | `config.VectorStoreConfig` | **`VectorStore`** bean |
@@ -115,7 +117,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 `src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
-- **`conf:`** — single place for app name, server port/context-path, Mongo, Ollama models/URL, springdoc toggles, logging levels, multipart limits.
+- **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits.
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
 - **`spring.ai.ollama.*`**, **`spring.ai.openai.*`**, **`spring.ai.vertex.ai.gemini.*`** map from **`conf.ollama.*`**, **`conf.openai.*`**, **`conf.vertex.gemini.*`**. **`LlmChatService`** injects **`ChatModel`** only — switching **`conf.ai.chat-provider`** swaps the adapter (Ollama, OpenAI, Vertex Gemini, …) with no code change.

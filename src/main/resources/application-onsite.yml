@@ -1,5 +1,5 @@
 #################################### Profile: onsite - on-premises / government network ##################################
-# Prefer setting env vars (MONGO_HOST, OLLAMA_BASE_URL, …) in deployment; defaults keep local fallbacks.
+# Prefer env vars (MONGO_HOST, OLLAMA_BASE_URL, …). Use MONGODB_URI when MongoDB requires TLS or a full connection string.
 
 conf:
   mongodb:

@@ -1,7 +1,7 @@
 package ai_chat.service.impl;
 
 import ai_chat.repository.KnowledgeDocumentRepository;
-import ai_chat.service.AIService;
+import ai_chat.service.ChatService;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -19,7 +19,7 @@ import java.util.List;
 
 /** Plain + RAG chat via Spring AI {@link ChatModel}; provider is chosen only in configuration ({@code conf.ai.chat-provider}). */
 @Service
-public class LlmChatService implements AIService {
+public class LlmChatService implements ChatService {
 
     private static final double RAG_SIMILARITY_THRESHOLD = 0.1;
     private static final int RAG_TOP_K = 1;

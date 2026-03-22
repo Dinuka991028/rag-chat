@@ -1,5 +1,6 @@
 #################################### Profile: production ###############################################################
 # Set MONGO_HOST, OLLAMA_BASE_URL, etc. in the environment; Swagger is off by default.
+# For MongoDB with TLS or Atlas: set MONGODB_URI (overrides host/port/database from conf).
 
 conf:
   mongodb:

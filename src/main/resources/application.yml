@@ -26,9 +26,8 @@ spring:
       max-request-size: ${conf.multipart.max-request-size:215MB}
   data:
     mongodb:
-      host: ${conf.mongodb.host}
-      port: ${conf.mongodb.port}
-      database: ${conf.mongodb.database}
+      # Optional MONGODB_URI for TLS / mongodb+srv / replica sets; else built from conf.mongodb.{host,port,database}
+      uri: ${MONGODB_URI:mongodb://${conf.mongodb.host}:${conf.mongodb.port}/${conf.mongodb.database}}
   ai:
     # Chat / embedding "adapters": Spring AI wires the matching ChatModel + EmbeddingModel beans from starters on the classpath.
     # conf.ai.chat-provider / conf.ai.embedding-provider: ollama | openai | vertexai (see conf: and profile YAML below).
@@ -102,6 +101,7 @@ conf:
     host: localhost
     port: 27017
     database: ai
+    # When MONGODB_URI is unset, URI is mongodb://{host}:{port}/{database}. Set MONGODB_URI in prod for TLS (e.g. ?tls=true or mongodb+srv://…).
   ai:
     # Switch LLM / embedder without code changes: ollama | openai | vertexai (match pom starters + credentials for that provider).
     chat-provider: ollama
