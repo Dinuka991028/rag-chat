@@ -121,12 +121,12 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | 1. **`ai_chat.domain.KnowledgeDocument`** — `@Document(collection = "kb_documents")`, Lombok `@Builder` | Yes |
 | 2. Fields: `id`, `content`, `category`, `source`, `embedding` (`List<Float>`) | Yes |
 | 3. **`ai_chat.repository.KnowledgeDocumentRepository`** — `MongoRepository<KnowledgeDocument, String>` | Yes |
-| 4. **`AiChatApplication`** — seed with **`saveAll`** (no raw `org.bson.Document`) | Yes |
-| 5. **`OllamaServiceImpl`** — RAG uses **`KnowledgeDocument`** via repository | Yes |
-| 6. **`EmbeddingUpdater`** — loads/saves **`KnowledgeDocument`** | Yes |
-| 7. Startup order: **`@Order(1)`** seed, **`@Order(2)`** embeddings | Yes |
+| 4. **`AiChatApplication`** — (superseded in **Phase 6**) now seeds via **`vectorStore.add`** | See Phase 6 |
+| 5. **`OllamaServiceImpl`** — RAG uses **`VectorStore`** (not direct entity loop) | Yes |
+| 6. ~~**`EmbeddingUpdater`**~~ — removed in **Phase 6** (embed at **`VectorStore.add`**) | N/A |
+| 7. Startup: **`@Order(1)`** seed only | Yes |
 
-**Note:** If an older **`kb_documents`** collection causes mapping errors, drop it or migrate rows, then restart so seed + embedding run again.
+**Note:** If an older **`kb_documents`** collection causes mapping errors, drop it or migrate rows, then restart.
 
 **Checkpoint:** Application starts; KB rows are typed entities. (`@SpringBootTest` still loads context.)
 
@@ -142,7 +142,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | 2. **`LocalMongoVectorStore`** implements **`VectorStore`** (`add`, `similaritySearch`, `delete` by id; filter-delete unsupported) | Yes |
 | 3. **`VectorStoreConfig`** exposes **`@Bean` `VectorStore`** | Yes |
 | 4. **`OllamaServiceImpl`** RAG path uses **`vectorStore.similaritySearch(SearchRequest)`** (threshold 0.1, topK 1) | Yes |
-| 5. **`EmbeddingUpdater`** uses **`EmbeddingModel.embed`** (no `RestTemplate` / `getEmbedding`) | Yes |
+| 5. Embeddings at seed: **`VectorStore.add`** (**Phase 6**) — no separate **`EmbeddingUpdater`** | Yes |
 | 6. Removed **`VectorSearchService`** (cosine logic lives in **`LocalMongoVectorStore`**) | Yes |
 
 **Note:** Metadata **filter expressions** on search/delete throw **`UnsupportedOperationException`** until implemented.
@@ -169,15 +169,16 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 ## Phase 6 — Startup seeding and embeddings
 
-1. **`AiChatApplication`** — Keep **creation of collection** and **seed data**, but insert **typed entities** or Spring AI **`Document`** instances and call **`vectorStore.add(...)`** instead of raw `Document` + manual embedding in a separate runner.
+**Status: done — 2026-03-22**
 
-2. **`EmbeddingUpdater`** — Either:
-   - **delete** it if `VectorStore.add` always embeds on ingest, or
-   - replace with a one-off migration command that loads documents without `embedding` and calls `vectorStore.add` / repository save with embedding.
+| Step | Done |
+|------|------|
+| 1. **`AiChatApplication`** builds Spring AI **`Document`** seeds (`text` + `category` / `source` metadata) | Yes |
+| 2. **`vectorStore.add(seeds)`** persists **`KnowledgeDocument`** + **embeddings** via **`LocalMongoVectorStore`** | Yes |
+| 3. **`EmbeddingUpdater`** **removed** (no second runner) | Yes |
+| 4. Single **`CommandLineRunner`** — **`@Order(1)`** on **`AiChatApplication`** | Yes |
 
-3. Ensure **only one** `CommandLineRunner` owns “seed KB” to avoid ordering bugs; use **`@Order(Ordered.HIGHEST_PRECEDENCE)`** on seed, then **`@Order(1)`** on optional post-migration if needed.
-
-**Checkpoint:** Fresh DB: app starts, KB is filled, embeddings exist, RAG answers from KB.
+**Checkpoint:** Empty KB → startup inserts all chunks **with embeddings**; RAG works without a separate embedding pass.
 
 ---
 
@@ -203,7 +204,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 ## Phase 8 — Cleanup and hardening
 
-1. **Delete** unused classes: old `OllamaServiceImpl` if fully replaced, redundant `VectorSearchService` if logic lives in `LocalMongoVectorStore`.
+1. **Delete** unused classes: old `OllamaServiceImpl` if fully renamed; **`VectorSearchService`** already removed (**Phase 4**).
 2. **Keep** `AIService` interface only if it still adds clarity; otherwise use `RagChatService` + `PlainChatService` names.
 3. **Update** **`ARCHITECTURE.md`** to match the new flow.
 4. **Government / security:** TLS to MongoDB, auth, network rules, backup/restore of `kb_documents`, audit trail for admin updates to KB.
@@ -219,7 +220,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | New | `KnowledgeDocument` + repo (**Phase 3**); **`LocalMongoVectorStore`** + **`spring-ai-vector-store`** (**Phase 4**); later: `ChatModel` + slim RAG service (**Phase 5**) |
 | Refactor | **`ChatModel`** in `OllamaServiceImpl` (**Phase 5**); optional rename to `ChatAiService` later |
 | Seed | `AiChatApplication` / runner → `vectorStore.add` |
-| Remove | `EmbeddingUpdater` or slim to migration only |
+| Remove | ~~`EmbeddingUpdater`~~ removed (**Phase 6**) |
 
 ---
 

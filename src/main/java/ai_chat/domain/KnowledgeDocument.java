@@ -30,6 +30,6 @@ public class KnowledgeDocument {
 
     private String source;
 
-    /** Embedding vector; null until {@link ai_chat.EmbeddingUpdater} runs. */
+    /** Embedding vector; set when rows are ingested via {@link ai_chat.vectorstore.LocalMongoVectorStore#add}. */
     private List<Float> embedding;
 }

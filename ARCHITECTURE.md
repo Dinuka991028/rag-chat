@@ -42,10 +42,9 @@ HTTP (JSON/text)
 
 Supporting pieces:
 
-- **`AiChatApplication`** — Spring Boot entry point; on startup **`@Order(1)`** it **seeds** `KnowledgeDocument` rows if the KB repository is empty (no embeddings yet).
-- **`EmbeddingUpdater`** — **`@Order(2)`**; loads all **`KnowledgeDocument`** rows, computes **embeddings** via Ollama, **`save`**s embeddings back to MongoDB.
+- **`AiChatApplication`** — **`@Order(1)`**; if the KB is empty, seeds Spring AI **`Document`** chunks and calls **`vectorStore.add(...)`**, which persists **`KnowledgeDocument`** rows **with embeddings** (via **`EmbeddingModel`** inside **`LocalMongoVectorStore`**).
 
-**`LocalMongoVectorStore`** implements Spring AI’s **`VectorStore`** (cosine similarity over **`KnowledgeDocument`** embeddings via **`EmbeddingModel`**). RAG calls **`vectorStore.similaritySearch(SearchRequest)`** from **`OllamaServiceImpl`**.
+**`LocalMongoVectorStore`** implements **`VectorStore`** (`add` + `similaritySearch`): cosine search over stored embeddings. RAG uses **`vectorStore.similaritySearch(SearchRequest)`** from **`OllamaServiceImpl`**.
 
 ---
 
@@ -56,7 +55,6 @@ Supporting pieces:
 | `AiChatApplication` | `@SpringBootApplication`, KB seeding `CommandLineRunner` **`@Order(1)`** |
 | `domain.KnowledgeDocument` | Typed Mongo entity for **`kb_documents`** |
 | `repository.KnowledgeDocumentRepository` | `MongoRepository` for KB CRUD |
-| `EmbeddingUpdater` | `CommandLineRunner` **`@Order(2)`** — fills `embedding` on KB docs |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
 | `service.AIService` | Contract: `askAI`, `askAIWithContext` |
 | `service.impl.OllamaServiceImpl` | **`ChatModel`** (`Prompt` / `SystemMessage` / `UserMessage`) + RAG via **`VectorStore`** |
@@ -79,7 +77,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## How RAG works (end-to-end)
 
-1. **Knowledge storage** — Documents live in MongoDB collection **`kb_documents`**, with fields such as `content`, `category`, `source`, and (after `EmbeddingUpdater` runs) **`embedding`** (list of floats).
+1. **Knowledge storage** — Documents live in MongoDB collection **`kb_documents`**, with fields such as `content`, `category`, `source`, and **`embedding`** (list of floats), populated on ingest via **`VectorStore.add`**.
 
 2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
@@ -104,7 +102,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Data model (MongoDB)
 
-- **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty; embeddings added by `EmbeddingUpdater`.
+- **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time).
 - **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr).
 
 ---
@@ -128,11 +126,11 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Operational notes
 
-1. **Startup order** — **`AiChatApplication`** is **`@Order(1)`**, **`EmbeddingUpdater`** **`@Order(2)`** so seeding runs before embeddings.
+1. **Startup seeding** — Single **`CommandLineRunner`**: **`AiChatApplication`** **`@Order(1)`** calls **`vectorStore.add`** so each chunk is embedded once at startup.
 
-2. **Embeddings** — **`EmbeddingUpdater`** and **`LocalMongoVectorStore`** both use **`EmbeddingModel`** (aligned with the configured Ollama embedding model).
+2. **Embeddings** — **`LocalMongoVectorStore.add`** and similarity search both use **`EmbeddingModel`** (Ollama).
 
-3. **Model assumptions** — Embeddings and chat both use **`llama3`**; for best RAG quality, embedding and generation models are often chosen to be compatible—follow Ollama docs for your deployment.
+3. **Model assumptions** — Default **`llama3`** for chat and embeddings; choose compatible models for production (see Ollama docs).
 
 ---
 
