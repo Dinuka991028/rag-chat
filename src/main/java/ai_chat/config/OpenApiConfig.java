@@ -14,6 +14,6 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("AI Chat API")
                         .version("1.0")
-                        .description("Spring Boot AI Chat API using Ollama"));
+                        .description("Spring AI ChatModel + VectorStore (Ollama) + MongoDB"));
     }
 }

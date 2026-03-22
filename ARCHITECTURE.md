@@ -11,8 +11,8 @@ This document describes the **technology stack**, **layered architecture**, and 
 | Language & runtime | **Java 17** |
 | Framework | **Spring Boot 3.5.x** (`spring-boot-starter-web`) |
 | Persistence | **MongoDB** via **Spring Data MongoDB** — **`KnowledgeDocument`** (`@Document`), **`KnowledgeDocumentRepository`**, plus **`MongoTemplate`** for `unknown_queries` (still BSON `Document`) |
-| LLM & embeddings | **Ollama** via **`RestTemplate`** for chat; **`EmbeddingModel`** (Ollama) for vectors + **`VectorStore`** |
-| HTTP client | **Spring `RestTemplate`** (calls Ollama) |
+| LLM & embeddings | **Spring AI** **`ChatModel`** + **`EmbeddingModel`** (Ollama auto-config); **`VectorStore`** for RAG retrieval |
+| HTTP client | *(none for Ollama — Spring AI client uses configured base URL)* |
 | API docs | **springdoc-openapi** (`springdoc-openapi-starter-webmvc-ui` 2.1.0) — Swagger UI |
 | Vector API | **`spring-ai-vector-store`** (`VectorStore`, `SearchRequest`) |
 | Build | **Maven** (`pom.xml`) |
@@ -36,8 +36,8 @@ HTTP (JSON/text)
     → ChatController
         → AIService (interface)
             → OllamaServiceImpl
-                → RestTemplate → Ollama
-                → VectorStore (LocalMongoVectorStore) / MongoTemplate → MongoDB
+                → ChatModel (Ollama) + VectorStore (LocalMongoVectorStore)
+                → MongoTemplate / KnowledgeDocumentRepository → MongoDB
 ```
 
 Supporting pieces:
@@ -59,7 +59,7 @@ Supporting pieces:
 | `EmbeddingUpdater` | `CommandLineRunner` **`@Order(2)`** — fills `embedding` on KB docs |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
 | `service.AIService` | Contract: `askAI`, `askAIWithContext` |
-| `service.impl.OllamaServiceImpl` | Ollama **generate** + RAG using **`VectorStore`** |
+| `service.impl.OllamaServiceImpl` | **`ChatModel`** (`Prompt` / `SystemMessage` / `UserMessage`) + RAG via **`VectorStore`** |
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
 | `config.VectorStoreConfig` | **`VectorStore`** bean |
 | `config.OpenApiConfig` | OpenAPI metadata for Swagger |
@@ -90,7 +90,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
    - A record may be inserted into collection **`unknown_queries`** (question + timestamp).
    - The user gets a fixed “not enough information” style message.
 
-5. **Grounded generation** — Retrieved `content` is concatenated into a **Knowledge Base** block. The LLM is instructed to answer **only** from that text and to refuse if the answer is not clearly there. The final answer is produced via **`/api/generate`**.
+5. **Grounded generation** — Retrieved excerpts are sent in a **`UserMessage`**; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
 
 6. **Non-RAG chat** — `POST .../chat` skips retrieval and uses a shorter **SSRP assistant** system prompt only.
 
@@ -98,7 +98,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## How plain chat works (no RAG)
 
-`askAI` builds a JSON body for Ollama **`POST`** `{ollamaBaseUrl}/api/generate` with the configured chat model, `stream: false`, and a combined prompt (SSRP system text + user message). The **`response`** field from the JSON body is returned to the client.
+`askAI` calls **`chatModel.call(new Prompt(new SystemMessage(SSRP…), new UserMessage(message)))`** and returns the assistant text from **`ChatResponse`** (no `RestTemplate`).
 
 ---
 
@@ -138,4 +138,4 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Summary
 
-**rag-chat** is a **Spring Boot 3** service that exposes **chat** and **RAG chat** endpoints, uses **MongoDB** with **`KnowledgeDocument`** + **`Spring AI VectorStore`**, and uses **Ollama** for **chat** (`RestTemplate`) and **`EmbeddingModel`** for vectors, with **OpenAPI/Swagger** for API exploration.
+**rag-chat** is a **Spring Boot 3** service that exposes **chat** and **RAG chat** endpoints, uses **MongoDB** with **`KnowledgeDocument`** + **`VectorStore`**, and uses Spring AI **`ChatModel`** + **`EmbeddingModel`** (Ollama) with **OpenAPI/Swagger** for API exploration.

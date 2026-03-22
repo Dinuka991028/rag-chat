@@ -153,25 +153,17 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 ## Phase 5 — RAG orchestration with `ChatModel` + `VectorStore`
 
-1. **Create a service** e.g. `RagChatService` (or rename `AIService` implementation) that depends on:
+**Status: done — 2026-03-22**
 
-   - `ChatModel` (or `ChatClient` if you use the fluent API — Spring AI supports both),
-   - `EmbeddingModel` (only if not fully hidden inside `VectorStore`),
-   - `VectorStore`,
-   - optional `MongoRepository` for **`unknown_queries`**.
+| Step | Done |
+|------|------|
+| 1. **`OllamaServiceImpl`** injects **`ChatModel`** (Ollama auto-config) | Yes |
+| 2. Plain chat: **`Prompt(SystemMessage, UserMessage)`** + **`chatModel.call`** | Yes |
+| 3. RAG: **`VectorStore.similaritySearch`** → **`Prompt`** with **RAG `SystemMessage`** + **`UserMessage`** (excerpts + question) | Yes |
+| 4. Response text via **`ChatResponse.getResult().getOutput().getText()`** | Yes |
+| 5. **`RestTemplate`** removed from chat path; **`ChatController`** still uses **`AIService`** only | Yes |
 
-2. **Flow for RAG:**
-
-   - `vectorStore.similaritySearch(SearchRequest.builder().query(userMessage).topK(3).similarityThreshold(0.1).build())`
-   - If empty / below threshold → log to `unknown_queries`, return your safe message.
-   - Build a **UserMessage** / prompt with “answer only from context” + joined chunk text + user question.
-   - Call **`chatModel.call(new Prompt(...))`** or **`ChatClient`** and return the string content.
-
-3. **Flow for non-RAG:** call **`ChatModel`** with your SSRP system prompt + user message only (no `VectorStore`).
-
-4. **Wire** `ChatController` to this service only.
-
-**Checkpoint:** `POST /chat` and `POST /chat/rag` behave like before; Ollama is no longer called via raw `RestTemplate` in business code.
+**Checkpoint:** `POST /chat` and `POST /chat/rag` use Spring AI **`ChatModel`** end-to-end for generation (no `RestTemplate` / `/api/generate`).
 
 ---
 
@@ -225,7 +217,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | `pom.xml` | BOM + `spring-ai-starter-model-ollama`; optional OpenAI starter later |
 | `application.yml` + `application-*.yml` | `conf:` + `${conf.*}`; Maven `@activatedProperties@`; per-profile `conf` overrides |
 | New | `KnowledgeDocument` + repo (**Phase 3**); **`LocalMongoVectorStore`** + **`spring-ai-vector-store`** (**Phase 4**); later: `ChatModel` + slim RAG service (**Phase 5**) |
-| Refactor | `ChatController` → new service; remove `RestTemplate` from domain |
+| Refactor | **`ChatModel`** in `OllamaServiceImpl` (**Phase 5**); optional rename to `ChatAiService` later |
 | Seed | `AiChatApplication` / runner → `vectorStore.add` |
 | Remove | `EmbeddingUpdater` or slim to migration only |
 

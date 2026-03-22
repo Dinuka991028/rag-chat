@@ -2,17 +2,20 @@ package ai_chat.service.impl;
 
 import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.service.AIService;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.Date;
+import java.util.List;
 
 @Service
 public class OllamaServiceImpl implements AIService {
@@ -20,13 +23,20 @@ public class OllamaServiceImpl implements AIService {
     private static final double RAG_SIMILARITY_THRESHOLD = 0.1;
     private static final int RAG_TOP_K = 1;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static final String SYSTEM_PLAIN =
+            "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
+                    + "Always respond in a polite, formal, and helpful tone suitable for a government service. "
+                    + "Answer clearly and briefly.";
 
-    @Value("${spring.ai.ollama.base-url:http://localhost:11434}")
-    private String ollamaBaseUrl;
+    private static final String SYSTEM_RAG =
+            "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain.\n"
+                    + "Answer ONLY using the knowledge base excerpts in the user message.\n"
+                    + "Do NOT use external knowledge.\n"
+                    + "If the answer is not clearly available in those excerpts, say exactly: "
+                    + "Sorry, I don't have enough information to answer that right now.";
 
-    @Value("${spring.ai.ollama.chat.options.model:llama3}")
-    private String chatModel;
+    @Autowired
+    private ChatModel chatModel;
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -37,35 +47,16 @@ public class OllamaServiceImpl implements AIService {
     @Autowired
     private KnowledgeDocumentRepository knowledgeDocumentRepository;
 
-    private String ollamaApiPath(String path) {
-        String base = ollamaBaseUrl.endsWith("/")
-                ? ollamaBaseUrl.substring(0, ollamaBaseUrl.length() - 1)
-                : ollamaBaseUrl;
-        return base + path;
-    }
-
     @Override
     public String askAI(String prompt) {
-
-        String url = ollamaApiPath("/api/generate");
-
-        String systemPrompt =
-                "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. " +
-                        "Always respond in a polite, formal, and helpful tone suitable for a government service. " +
-                        "Answer clearly and briefly.";
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("model", chatModel);
-        request.put("prompt", systemPrompt + "\n\nCustomer: " + prompt);
-        request.put("stream", false);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
-
-        return response.getBody().get("response").toString();
+        try {
+            ChatResponse response = chatModel.call(
+                    new Prompt(new SystemMessage(SYSTEM_PLAIN), new UserMessage(prompt)));
+            return extractAssistantText(response);
+        } catch (Exception e) {
+            System.err.println("Chat model error: " + e.getMessage());
+            return "Sorry, the AI service is temporarily unavailable. Please try again later.";
+        }
     }
 
     @Override
@@ -104,20 +95,27 @@ public class OllamaServiceImpl implements AIService {
             }
         }
 
-        String fullPrompt =
-                "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain.\n" +
-                        "Answer ONLY using the provided knowledge base.\n" +
-                        "Do NOT use external knowledge.\n" +
-                        "If the answer is not clearly available, say: 'Sorry, I don’t have enough information to answer that right now.'\n\n" +
-                        "Knowledge Base:\n" +
-                        context +
-                        "Customer Question: " + prompt;
+        String userPayload =
+                "Knowledge base excerpts:\n\n" + context + "\nCustomer question: " + prompt;
 
         try {
-            return askAI(fullPrompt);
+            ChatResponse response = chatModel.call(
+                    new Prompt(new SystemMessage(SYSTEM_RAG), new UserMessage(userPayload)));
+            return extractAssistantText(response);
         } catch (Exception e) {
-            System.err.println("Ollama API error: " + e.getMessage());
+            System.err.println("Chat model error: " + e.getMessage());
             return "Sorry, the AI service is temporarily unavailable. Please try again later.";
         }
+    }
+
+    private static String extractAssistantText(ChatResponse response) {
+        if (response == null || response.getResult() == null) {
+            return "";
+        }
+        var output = response.getResult().getOutput();
+        if (output == null) {
+            return "";
+        }
+        return output.getText();
     }
 }
