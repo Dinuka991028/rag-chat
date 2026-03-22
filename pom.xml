@@ -176,6 +176,15 @@
 					</excludes>
 				</configuration>
 			</plugin>
+			<!-- Export PDF → kb/ssrp-srs-llm.md: mvn -q compile exec:java "-Dexec.args=src/main/resources/kb/ssrp-srs.pdf src/main/resources/kb/ssrp-srs-llm.md" -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<configuration>
+					<mainClass>ai_chat.tools.SrsPdfToMarkdownExporter</mainClass>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

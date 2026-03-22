@@ -2,6 +2,7 @@ package ai_chat;
 
 import ai_chat.kb.PdfTextExtractor;
 import ai_chat.kb.SrsChunker;
+import ai_chat.kb.SrsMarkdownChunker;
 import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import org.slf4j.Logger;
@@ -19,10 +20,15 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-/** Seeds the KB from the SRS PDF only when empty; not registered for {@code test} profile. */
+/**
+ * Seeds the KB when empty: curated customer FAQ snippets (high precision) plus optional SRS PDF chunks.
+ * Not registered for {@code test} profile.
+ */
 @Component
 @Profile("!test")
 @Order(1)
@@ -45,6 +51,13 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
     @Value("${conf.kb.srs-pdf-classpath:classpath:kb/ssrp-srs.pdf}")
     private String srsPdfClasspath;
 
+    /** When true, use {@link #srsMarkdownClasspath} if the resource exists (LLM-friendly markdown); else PDF. */
+    @Value("${conf.kb.srs-use-markdown:true}")
+    private boolean srsUseMarkdown;
+
+    @Value("${conf.kb.srs-markdown-classpath:classpath:kb/ssrp-srs-llm.md}")
+    private String srsMarkdownClasspath;
+
     @Value("${conf.kb.srs-chunk-max-chars:900}")
     private int srsChunkMaxChars;
 
@@ -58,15 +71,125 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
             return;
         }
 
-        List<Document> seeds = loadSrsPdfDocuments();
+        List<Document> seeds = new ArrayList<>();
+        seeds.addAll(curatedFaqDocuments());
+        seeds.addAll(loadSrsKnowledgeDocuments());
+
         if (seeds.isEmpty()) {
-            log.warn("KB not seeded: no SRS chunks (place ssrp-srs.pdf under src/main/resources/kb/, "
-                    + "set conf.kb.srs-pdf-enabled=true, or fix PDF text extraction). RAG will have no documents.");
+            log.warn("KB not seeded: add curated FAQ in code and/or place ssrp-srs.pdf / ssrp-srs-llm.md under src/main/resources/kb/.");
             return;
         }
 
         vectorStore.add(seeds);
-        log.info("KB seeded with {} SRS chunk(s) (VectorStore.add)", seeds.size());
+        log.info("KB seeded with {} document(s) (curated FAQ + SRS) (VectorStore.add)", seeds.size());
+    }
+
+    /** Short, customer-tested answers; category is not {@code SRS} so retrieval can prefer these over raw PDF chunks. */
+    private static List<Document> curatedFaqDocuments() {
+        return Arrays.asList(
+                kb("Welcome to Bahrain Small Ship Registry Portal (SSRP). I can guide you with vessel registration. You can register a Boat, Jet Ski, or Dhow.",
+                        "VesselRegistration", "curated-faq-newVesselRegistration"),
+
+                kb("For new vessel registration, you typically need proof of ownership, vessel details, and owner identification documents. This applies to all vessels: Boat, Jet Ski, and Dhow.",
+                        "VesselRegistration", "curated-faq-vessel-reg-documents"),
+
+                kb("Boat registration documents include:\n"
+                                + "- Owner ID (CPR for residents or passport for non-residents)\n"
+                                + "- Proof of ownership (invoice or sale contract)\n"
+                                + "- Boat specifications (length, hull material, engine details)\n"
+                                + "- Hull Identification Number (HIN) or serial numbers if available\n"
+                                + "- Photos of the boat\n"
+                                + "- Import/customs documents if the boat is imported",
+                        "BoatRegistration", "curated-faq-vessel-reg-documents-boat"),
+
+                kb("Jet Ski registration documents include:\n"
+                                + "- Owner ID\n"
+                                + "- Proof of ownership\n"
+                                + "- Jet Ski make, model, and serial number\n"
+                                + "- Engine details if applicable\n"
+                                + "- Photos of the Jet Ski\n"
+                                + "- Import/customs documents if applicable",
+                        "JetSkiRegistration", "curated-faq-vessel-reg-documents-jet-ski"),
+
+                kb("Dhow registration documents include:\n"
+                                + "- Owner ID\n"
+                                + "- Proof of ownership\n"
+                                + "- Dhow specifications (length, build details)\n"
+                                + "- Serial numbers or identification if available\n"
+                                + "- Photos of the dhow\n"
+                                + "- Import/customs documents if applicable",
+                        "DhowRegistration", "curated-faq-vessel-reg-documents-dhow"),
+
+                kb("Steps to register a Boat via SSRP portal:\n"
+                                + "1) Go to New Vessel Registration → Boat\n"
+                                + "2) Enter owner details and boat specifications\n"
+                                + "3) Upload all required documents\n"
+                                + "4) Submit the application\n"
+                                + "5) Pay registration fees as displayed in the portal\n"
+                                + "6) Wait for inspection/verification if required\n"
+                                + "7) Receive registration certificate",
+                        "BoatRegistration", "curated-faq-vessel-reg-process-boat"),
+
+                kb("Steps to register a Jet Ski via SSRP portal:\n"
+                                + "1) Go to New Vessel Registration → Jet Ski\n"
+                                + "2) Enter owner and Jet Ski details\n"
+                                + "3) Upload required documents\n"
+                                + "4) Submit the application\n"
+                                + "5) Pay fees\n"
+                                + "6) Wait for verification if needed\n"
+                                + "7) Receive registration certificate",
+                        "JetSkiRegistration", "curated-faq-vessel-reg-process-jet-ski"),
+
+                kb("Steps to register a Dhow via SSRP portal:\n"
+                                + "1) Go to New Vessel Registration → Dhow\n"
+                                + "2) Enter owner and dhow specifications\n"
+                                + "3) Upload required documents\n"
+                                + "4) Submit application\n"
+                                + "5) Pay fees\n"
+                                + "6) Wait for verification if applicable\n"
+                                + "7) Receive registration certificate",
+                        "DhowRegistration", "curated-faq-vessel-reg-process-dhow"),
+
+                kb("General vessel registration process in Bahrain SSRP:\n"
+                                + "- Choose vessel type (Boat, Jet Ski, Dhow)\n"
+                                + "- Enter owner and vessel details\n"
+                                + "- Upload all required documents\n"
+                                + "- Submit the application\n"
+                                + "- Pay fees\n"
+                                + "- Inspection/verification if required\n"
+                                + "- Receive registration certificate",
+                        "VesselRegistration", "curated-faq-vessel-reg-process")
+        );
+    }
+
+    private static Document kb(String text, String category, String source) {
+        return Document.builder()
+                .text(text)
+                .metadata("category", category)
+                .metadata("source", source)
+                .build();
+    }
+
+    private List<Document> loadSrsKnowledgeDocuments() {
+        if (srsUseMarkdown) {
+            Resource md = resourceLoader.getResource(srsMarkdownClasspath);
+            if (md.exists() && md.isReadable()) {
+                try (InputStream in = md.getInputStream()) {
+                    String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                    List<SrsChunker.SrsIndexedChunk> chunks =
+                            SrsMarkdownChunker.chunk(text, srsChunkMaxChars, srsChunkOverlap);
+                    if (!chunks.isEmpty()) {
+                        log.info("Using LLM-friendly markdown SRS at {} ({} chunks)", srsMarkdownClasspath, chunks.size());
+                        return toSrsDocuments(chunks, "ssrp-srs-llm-md");
+                    }
+                } catch (IOException e) {
+                    log.warn("Could not read SRS markdown at {}: {}", srsMarkdownClasspath, e.getMessage());
+                }
+            } else {
+                log.info("SRS markdown not found at {} — falling back to PDF if enabled.", srsMarkdownClasspath);
+            }
+        }
+        return loadSrsPdfDocuments();
     }
 
     private List<Document> loadSrsPdfDocuments() {
@@ -88,24 +211,27 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
                 log.warn("SRS PDF at {} produced no text (empty or scanned image PDF?).", srsPdfClasspath);
                 return List.of();
             }
-            List<Document> docs = new ArrayList<>(chunks.size());
-            for (SrsChunker.SrsIndexedChunk ch : chunks) {
-                var b = Document.builder()
-                        .text(ch.textForEmbedding())
-                        .metadata("category", "SRS")
-                        .metadata("source", "ssrp-srs-pdf")
-                        .metadata("chunkIndex", ch.chunkIndex());
-                if (ch.sectionHeading() != null && !ch.sectionHeading().isBlank()) {
-                    b.metadata("sectionHeading", ch.sectionHeading());
-                }
-                docs.add(b.build());
-            }
-            log.info("Indexed SRS PDF: {} chunk(s) from {} (after cleanup + section-aware chunking)", chunks.size(),
-                    srsPdfClasspath);
-            return docs;
+            log.info("Indexed SRS PDF: {} chunk(s) from {} (cleanup + chunking)", chunks.size(), srsPdfClasspath);
+            return toSrsDocuments(chunks, "ssrp-srs-pdf");
         } catch (IOException e) {
             log.warn("Could not read SRS PDF at {}: {}", srsPdfClasspath, e.getMessage());
             return List.of();
         }
+    }
+
+    private List<Document> toSrsDocuments(List<SrsChunker.SrsIndexedChunk> chunks, String sourceId) {
+        List<Document> docs = new ArrayList<>(chunks.size());
+        for (SrsChunker.SrsIndexedChunk ch : chunks) {
+            var b = Document.builder()
+                    .text(ch.textForEmbedding())
+                    .metadata("category", "SRS")
+                    .metadata("source", sourceId)
+                    .metadata("chunkIndex", ch.chunkIndex());
+            if (ch.sectionHeading() != null && !ch.sectionHeading().isBlank()) {
+                b.metadata("sectionHeading", ch.sectionHeading());
+            }
+            docs.add(b.build());
+        }
+        return docs;
     }
 }

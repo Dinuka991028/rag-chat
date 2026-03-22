@@ -14,18 +14,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /** Plain + RAG chat via Spring AI {@link ChatModel}; provider is chosen only in configuration ({@code conf.ai.chat-provider}). */
 @Service
 public class LlmChatService implements ChatService {
 
     /**
-     * SRS is chunked into many segments; retrieving only one often misses the answer. Use several top matches.
-     * Threshold 0 = rank by similarity but do not drop results below an arbitrary cosine floor (see {@link SearchRequest#SIMILARITY_THRESHOLD_ACCEPT_ALL}).
+     * Fetch a larger pool so short curated FAQ chunks can be merged in even when raw SRS chunks rank higher.
      */
     private static final double RAG_SIMILARITY_THRESHOLD = SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL;
+    private static final int RAG_FETCH_POOL = 28;
+    /** Max curated FAQ passages to force into context before filling with SRS PDF chunks. */
+    private static final int RAG_CURATED_CAP = 5;
     private static final int RAG_TOP_K = 8;
 
     private static final String SYSTEM_PLAIN =
@@ -35,10 +39,14 @@ public class LlmChatService implements ChatService {
 
     private static final String SYSTEM_RAG =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain.\n"
-                    + "Answer ONLY using the knowledge base excerpts in the user message (they may be partial; combine information across excerpts when needed).\n"
-                    + "Do NOT use external knowledge.\n"
-                    + "If the excerpts do not contain enough information to answer, say exactly: "
-                    + "Sorry, I don't have enough information to answer that right now.";
+                    + "Use ONLY the knowledge base excerpts in the user message. Do not use outside knowledge.\n"
+                    + "Reply in a formal, concise government-service style. Do not use chit-chat or phrases like \"I'm happy to help\".\n"
+                    + "Answer the customer's question directly in a few short sentences.\n"
+                    + "If the excerpts do not clearly and directly answer the question, respond ONLY with exactly: "
+                    + "Sorry, I don't have enough information to answer that right now.\n"
+                    + "Do not invent section numbers, form names, or steps that are not in the excerpts.\n"
+                    + "Do not suggest unrelated processes (for example renewal or payment flows) as a workaround when the question was about something else.\n"
+                    + "Do not give long hedging answers when the excerpts are missing or only loosely related.";
 
     @Autowired
     private ChatModel chatModel;
@@ -71,12 +79,14 @@ public class LlmChatService implements ChatService {
             return "Knowledge base is empty.";
         }
 
-        List<Document> found = vectorStore.similaritySearch(
+        List<Document> raw = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(prompt)
-                        .topK(RAG_TOP_K)
+                        .topK(RAG_FETCH_POOL)
                         .similarityThreshold(RAG_SIMILARITY_THRESHOLD)
                         .build());
+
+        List<Document> found = mergeCuratedWithSrs(raw, RAG_CURATED_CAP, RAG_TOP_K);
 
         if (found == null || found.isEmpty()) {
             org.bson.Document unknown = new org.bson.Document();
@@ -122,5 +132,44 @@ public class LlmChatService implements ChatService {
             return "";
         }
         return output.getText();
+    }
+
+    /** Curated FAQ chunks use category != SRS; prefer them when present in the similarity pool. */
+    private static boolean isCuratedFaqChunk(Document d) {
+        Map<String, Object> meta = d.getMetadata();
+        if (meta == null) {
+            return false;
+        }
+        Object c = meta.get("category");
+        return c != null && !"SRS".equals(String.valueOf(c));
+    }
+
+    /**
+     * Keeps similarity order within each group: up to {@code curatedCap} FAQ rows first, then SRS rows to fill {@code maxTotal}.
+     */
+    private static List<Document> mergeCuratedWithSrs(List<Document> scored, int curatedCap, int maxTotal) {
+        if (scored == null || scored.isEmpty()) {
+            return List.of();
+        }
+        List<Document> faq = new ArrayList<>();
+        List<Document> srs = new ArrayList<>();
+        for (Document d : scored) {
+            if (isCuratedFaqChunk(d)) {
+                faq.add(d);
+            } else {
+                srs.add(d);
+            }
+        }
+        List<Document> out = new ArrayList<>(maxTotal);
+        for (int i = 0; i < Math.min(curatedCap, faq.size()); i++) {
+            out.add(faq.get(i));
+        }
+        for (Document d : srs) {
+            if (out.size() >= maxTotal) {
+                break;
+            }
+            out.add(d);
+        }
+        return out;
     }
 }

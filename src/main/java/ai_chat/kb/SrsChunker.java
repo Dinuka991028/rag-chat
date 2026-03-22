@@ -2,18 +2,11 @@ package ai_chat.kb;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
- * Paragraph-oriented chunking with a running SRS section title. Each chunk's text begins with
- * {@code Section: ...} when known, so embeddings align better with user questions.
+ * Paragraph-oriented chunking with a running SRS section title. Uses {@link SrsEmbeddingFormat} for each chunk.
  */
 public final class SrsChunker {
-
-    private static final Pattern SECTION_NUMERIC = Pattern.compile(
-            "^\\s*(\\d+(?:\\.\\d+)*)\\s+([A-Za-z0-9][^\\n]{0,300})$");
-    private static final Pattern SECTION_INTRO = Pattern.compile(
-            "^\\s*(\\d+)\\s+([A-Z][A-Z0-9 ,\\-]{3,80})\\s*$");
 
     private SrsChunker() {}
 
@@ -33,17 +26,17 @@ public final class SrsChunker {
         List<SrsIndexedChunk> chunks = new ArrayList<>();
 
         for (String para : paragraphs) {
-            if (isLikelySectionHeading(para)) {
+            if (SrsHeadingDetector.isLikelySectionHeading(para)) {
                 emitBuffer(chunks, section, buffer, maxChars, overlap);
                 buffer.clear();
-                section = shortenHeading(para);
+                section = SrsHeadingDetector.shortenHeading(para);
                 continue;
             }
             if (para.length() > maxChars) {
                 emitBuffer(chunks, section, buffer, maxChars, overlap);
                 buffer.clear();
-                for (String part : splitLong(para, maxChars, overlap)) {
-                    chunks.add(new SrsIndexedChunk(0, section, embedText(section, part)));
+                for (String part : SrsTextSplit.splitLong(para, maxChars, overlap)) {
+                    chunks.add(new SrsIndexedChunk(0, section, SrsEmbeddingFormat.formatChunk(section, part)));
                 }
                 continue;
             }
@@ -95,58 +88,11 @@ public final class SrsChunker {
         }
         String body = String.join("\n\n", buffer);
         if (body.length() <= maxChars) {
-            chunks.add(new SrsIndexedChunk(0, section, embedText(section, body)));
+            chunks.add(new SrsIndexedChunk(0, section, SrsEmbeddingFormat.formatChunk(section, body)));
             return;
         }
-        for (String part : splitLong(body, maxChars, overlap)) {
-            chunks.add(new SrsIndexedChunk(0, section, embedText(section, part)));
+        for (String part : SrsTextSplit.splitLong(body, maxChars, overlap)) {
+            chunks.add(new SrsIndexedChunk(0, section, SrsEmbeddingFormat.formatChunk(section, part)));
         }
-    }
-
-    private static String embedText(String section, String body) {
-        if (section == null || section.isBlank()) {
-            return body;
-        }
-        return "Section: " + section.trim() + "\n\n" + body;
-    }
-
-    private static boolean isLikelySectionHeading(String para) {
-        if (para.length() > 220) {
-            return false;
-        }
-        if (SECTION_NUMERIC.matcher(para).matches() || SECTION_INTRO.matcher(para).matches()) {
-            return true;
-        }
-        return para.length() < 100 && para.equals(para.toUpperCase(java.util.Locale.ROOT))
-                && para.chars().filter(Character::isLetter).count() > 3;
-    }
-
-    private static String shortenHeading(String para) {
-        String oneLine = para.replace('\n', ' ').trim();
-        return oneLine.length() > 200 ? oneLine.substring(0, 197) + "..." : oneLine;
-    }
-
-    private static List<String> splitLong(String para, int maxChars, int overlap) {
-        List<String> parts = new ArrayList<>();
-        int step = Math.max(1, maxChars - overlap);
-        int pos = 0;
-        while (pos < para.length()) {
-            int end = Math.min(pos + maxChars, para.length());
-            if (end < para.length()) {
-                int breakAt = para.lastIndexOf('.', end - 1);
-                if (breakAt > pos + maxChars / 3) {
-                    end = breakAt + 1;
-                }
-            }
-            String piece = para.substring(pos, end).trim();
-            if (!piece.isEmpty()) {
-                parts.add(piece);
-            }
-            if (end >= para.length()) {
-                break;
-            }
-            pos += step;
-        }
-        return parts;
     }
 }
