@@ -11,9 +11,10 @@ This document describes the **technology stack**, **layered architecture**, and 
 | Language & runtime | **Java 17** |
 | Framework | **Spring Boot 3.5.x** (`spring-boot-starter-web`) |
 | Persistence | **MongoDB** via **Spring Data MongoDB** — **`KnowledgeDocument`** (`@Document`), **`KnowledgeDocumentRepository`**, plus **`MongoTemplate`** for `unknown_queries` (still BSON `Document`) |
-| LLM & embeddings | **Ollama** (HTTP), model **`llama3`** — `/api/generate` for text, `/api/embeddings` for vectors |
+| LLM & embeddings | **Ollama** via **`RestTemplate`** for chat; **`EmbeddingModel`** (Ollama) for vectors + **`VectorStore`** |
 | HTTP client | **Spring `RestTemplate`** (calls Ollama) |
 | API docs | **springdoc-openapi** (`springdoc-openapi-starter-webmvc-ui` 2.1.0) — Swagger UI |
+| Vector API | **`spring-ai-vector-store`** (`VectorStore`, `SearchRequest`) |
 | Build | **Maven** (`pom.xml`) |
 | Optional DX | **Lombok** — used on **`KnowledgeDocument`** (`@Builder`, etc.) |
 
@@ -36,7 +37,7 @@ HTTP (JSON/text)
         → AIService (interface)
             → OllamaServiceImpl
                 → RestTemplate → Ollama
-                → KnowledgeDocumentRepository / MongoTemplate → MongoDB
+                → VectorStore (LocalMongoVectorStore) / MongoTemplate → MongoDB
 ```
 
 Supporting pieces:
@@ -44,7 +45,7 @@ Supporting pieces:
 - **`AiChatApplication`** — Spring Boot entry point; on startup **`@Order(1)`** it **seeds** `KnowledgeDocument` rows if the KB repository is empty (no embeddings yet).
 - **`EmbeddingUpdater`** — **`@Order(2)`**; loads all **`KnowledgeDocument`** rows, computes **embeddings** via Ollama, **`save`**s embeddings back to MongoDB.
 
-There is also a **`VectorSearchService`** class that implements cosine similarity for ranked retrieval; **it is not wired into `OllamaServiceImpl` today** — RAG scoring is implemented inline in `OllamaServiceImpl`. `VectorSearchService` is available for reuse or future refactoring.
+**`LocalMongoVectorStore`** implements Spring AI’s **`VectorStore`** (cosine similarity over **`KnowledgeDocument`** embeddings via **`EmbeddingModel`**). RAG calls **`vectorStore.similaritySearch(SearchRequest)`** from **`OllamaServiceImpl`**.
 
 ---
 
@@ -58,8 +59,9 @@ There is also a **`VectorSearchService`** class that implements cosine similarit
 | `EmbeddingUpdater` | `CommandLineRunner` **`@Order(2)`** — fills `embedding` on KB docs |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
 | `service.AIService` | Contract: `askAI`, `askAIWithContext` |
-| `service.impl.OllamaServiceImpl` | Ollama integration + RAG pipeline |
-| `service.VectorSearchService` | Cosine similarity helpers (not used by controller path today) |
+| `service.impl.OllamaServiceImpl` | Ollama **generate** + RAG using **`VectorStore`** |
+| `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
+| `config.VectorStoreConfig` | **`VectorStore`** bean |
 | `config.OpenApiConfig` | OpenAPI metadata for Swagger |
 
 ---
@@ -79,11 +81,11 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 1. **Knowledge storage** — Documents live in MongoDB collection **`kb_documents`**, with fields such as `content`, `category`, `source`, and (after `EmbeddingUpdater` runs) **`embedding`** (list of floats).
 
-2. **Query embedding** — For `POST .../chat/rag`, `OllamaServiceImpl` calls Ollama **`/api/embeddings`** with the user’s prompt and builds a **query vector**.
+2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
-3. **Similarity search** — For each document that has an `embedding`, the service computes **cosine similarity** between the query vector and the document vector (dimensions must match or the pair is skipped).
+3. **Similarity search** — **`VectorStore.similaritySearch(SearchRequest)`** scores stored embeddings with **cosine similarity**, applies **`similarityThreshold`** (0.1) and **`topK`** (1), returns Spring AI **`Document`** results.
 
-4. **Top-k & threshold** — The code sorts by similarity and keeps matches with score **≥ 0.1** (implementation currently picks **at least one** top document when above threshold; see source for exact loop). If nothing passes the threshold:
+4. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
 
    - A record may be inserted into collection **`unknown_queries`** (question + timestamp).
    - The user gets a fixed “not enough information” style message.
@@ -126,9 +128,9 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Operational notes
 
-1. **Startup order** — Two `CommandLineRunner` beans (`AiChatApplication` and `EmbeddingUpdater`) run after the context starts. If ordering ever matters strictly (seed before embed), consider `@Order` or consolidating startup logic so seeding always completes before embedding updates.
+1. **Startup order** — **`AiChatApplication`** is **`@Order(1)`**, **`EmbeddingUpdater`** **`@Order(2)`** so seeding runs before embeddings.
 
-2. **`VectorSearchService`** — Duplicate cosine logic exists in `OllamaServiceImpl`; consolidating on `VectorSearchService` would reduce duplication.
+2. **Embeddings** — **`EmbeddingUpdater`** and **`LocalMongoVectorStore`** both use **`EmbeddingModel`** (aligned with the configured Ollama embedding model).
 
 3. **Model assumptions** — Embeddings and chat both use **`llama3`**; for best RAG quality, embedding and generation models are often chosen to be compatible—follow Ollama docs for your deployment.
 
@@ -136,4 +138,4 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Summary
 
-**rag-chat** is a **Spring Boot 3** service that exposes **chat** and **RAG chat** endpoints, uses **MongoDB** for a small knowledge base and unknown-query logging, and uses **Ollama** (`llama3`) for **embedding** and **text generation**, with **OpenAPI/Swagger** for API exploration.
+**rag-chat** is a **Spring Boot 3** service that exposes **chat** and **RAG chat** endpoints, uses **MongoDB** with **`KnowledgeDocument`** + **`Spring AI VectorStore`**, and uses **Ollama** for **chat** (`RestTemplate`) and **`EmbeddingModel`** for vectors, with **OpenAPI/Swagger** for API exploration.

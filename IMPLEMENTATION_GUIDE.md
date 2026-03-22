@@ -134,30 +134,20 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 ## Phase 4 — Custom `VectorStore` for local MongoDB
 
-Spring AI’s **`VectorStore`** is the port; your **local Mongo** implementation is the adapter.
+**Status: done — 2026-03-22**
 
-1. **Create a class** `LocalMongoVectorStore` (name as you like) in e.g. `ai_chat.vectorstore` implementing **`org.springframework.ai.vectorstore.VectorStore`**.
+| Step | Done |
+|------|------|
+| 1. **`spring-ai-vector-store`** dependency in `pom.xml` | Yes |
+| 2. **`LocalMongoVectorStore`** implements **`VectorStore`** (`add`, `similaritySearch`, `delete` by id; filter-delete unsupported) | Yes |
+| 3. **`VectorStoreConfig`** exposes **`@Bean` `VectorStore`** | Yes |
+| 4. **`OllamaServiceImpl`** RAG path uses **`vectorStore.similaritySearch(SearchRequest)`** (threshold 0.1, topK 1) | Yes |
+| 5. **`EmbeddingUpdater`** uses **`EmbeddingModel.embed`** (no `RestTemplate` / `getEmbedding`) | Yes |
+| 6. Removed **`VectorSearchService`** (cosine logic lives in **`LocalMongoVectorStore`**) | Yes |
 
-2. **Inject** `MongoTemplate` (and **`EmbeddingModel`** if you compute embeddings inside `add()`).
+**Note:** Metadata **filter expressions** on search/delete throw **`UnsupportedOperationException`** until implemented.
 
-3. **Implement** (method names follow Spring AI 1.x — verify against your Javadoc):
-
-   - **`add(List<Document> documents)`** — For each Spring AI `Document`, persist `content` and metadata (category, source) into your Mongo collection; compute embedding with **`embeddingModel.embed(...)`** if not already present, then store the vector in the same document.
-   - **`similaritySearch(SearchRequest)`** — Load candidate documents from Mongo (full collection or filtered), **embed the query** with `EmbeddingModel`, rank by cosine similarity (reuse logic from your current `OllamaServiceImpl` / `VectorSearchService`), apply `topK` and `similarityThreshold` from `SearchRequest`, return **`List<Document>`** with text + metadata.
-   - Implement **`delete`** / **`filter`** if your interface requires them (delegate to `MongoTemplate` or leave no-op for a minimal first version).
-
-4. **Register a `@Bean`** only if auto-config does not create one:
-
-```java
-@Bean
-public VectorStore vectorStore(MongoTemplate mongoTemplate, EmbeddingModel embeddingModel) {
-    return new LocalMongoVectorStore(mongoTemplate, embeddingModel, "kb_documents");
-}
-```
-
-5. **Remove** duplicate cosine logic from the old service once this class is used everywhere.
-
-**Checkpoint:** Unit test `similaritySearch` with a few in-memory or test-container Mongo fixtures, or manual test: add two chunks, search, assert order.
+**Checkpoint:** Run app with Mongo + Ollama; `/chat/rag` behaves as before after embeddings are populated.
 
 ---
 
@@ -234,7 +224,7 @@ public VectorStore vectorStore(MongoTemplate mongoTemplate, EmbeddingModel embed
 |------|--------|
 | `pom.xml` | BOM + `spring-ai-starter-model-ollama`; optional OpenAI starter later |
 | `application.yml` + `application-*.yml` | `conf:` + `${conf.*}`; Maven `@activatedProperties@`; per-profile `conf` overrides |
-| New | `KnowledgeDocument` + repository (**Phase 3**); later: `LocalMongoVectorStore`, `RagChatService` |
+| New | `KnowledgeDocument` + repo (**Phase 3**); **`LocalMongoVectorStore`** + **`spring-ai-vector-store`** (**Phase 4**); later: `ChatModel` + slim RAG service (**Phase 5**) |
 | Refactor | `ChatController` → new service; remove `RestTemplate` from domain |
 | Seed | `AiChatApplication` / runner → `vectorStore.add` |
 | Remove | `EmbeddingUpdater` or slim to migration only |
