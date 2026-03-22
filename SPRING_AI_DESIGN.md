@@ -145,7 +145,7 @@ Beans:
 ```
 
 - **Remove** direct `RestTemplate` calls to Ollama from business logic; keep them only inside a custom adapter if you must.
-- **Remove** duplicate cosine logic from `OllamaServiceImpl` once **`VectorStore`** handles search (or centralize in your custom `VectorStore`).
+- **Remove** duplicate cosine logic from the chat service once **`VectorStore`** handles search (or centralize in your custom `VectorStore`).
 
 ---
 

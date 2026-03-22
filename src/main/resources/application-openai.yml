@@ -1,0 +1,12 @@
+#################################### Profile: openai — OpenAI chat (optional) ##########################################
+# Activate: --spring.profiles.active=dev,openai  (or prod,openai)
+# Set OPENAI_API_KEY. By default we keep embeddings on Ollama so existing kb_documents vectors still match queries.
+
+conf:
+  ai:
+    chat-provider: openai
+    embedding-provider: ollama
+  openai:
+    api-key: ${OPENAI_API_KEY}
+    chat-model: gpt-4o-mini
+    embedding-model: text-embedding-3-small

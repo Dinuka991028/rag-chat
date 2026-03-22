@@ -2,6 +2,13 @@
 spring:
   application:
     name: ${conf.application.name}
+  autoconfigure:
+    # OpenAI starter registers optional modalities that require a key even when chat/embeddings use Ollama; exclude unless you set OPENAI_API_KEY for these features.
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
   profiles:
     active: @activatedProperties@
   banner:
@@ -23,6 +30,11 @@ spring:
       port: ${conf.mongodb.port}
       database: ${conf.mongodb.database}
   ai:
+    # Chat / embedding "adapters": Spring AI wires the matching ChatModel + EmbeddingModel beans from starters on the classpath.
+    # conf.ai.chat-provider / conf.ai.embedding-provider: ollama | openai | vertexai (see conf: and profile YAML below).
+    model:
+      chat: ${conf.ai.chat-provider}
+      embedding: ${conf.ai.embedding-provider}
     ollama:
       base-url: ${conf.ollama.base-url}
       chat:
@@ -31,6 +43,22 @@ spring:
       embedding:
         options:
           model: ${conf.ollama.embedding-model}
+    openai:
+      api-key: ${conf.openai.api-key}
+      chat:
+        options:
+          model: ${conf.openai.chat-model}
+      embedding:
+        options:
+          model: ${conf.openai.embedding-model}
+    vertex:
+      ai:
+        gemini:
+          project-id: ${conf.vertex.gemini.project-id:}
+          location: ${conf.vertex.gemini.location:us-central1}
+          chat:
+            options:
+              model: ${conf.vertex.gemini.chat-model:gemini-2.0-flash}
 #################################### / Spring ##########################################################################
 
 #################################### Server ############################################################################
@@ -74,10 +102,23 @@ conf:
     host: localhost
     port: 27017
     database: ai
+  ai:
+    # Switch LLM / embedder without code changes: ollama | openai | vertexai (match pom starters + credentials for that provider).
+    chat-provider: ollama
+    embedding-provider: ollama
   ollama:
     base-url: http://localhost:11434
     chat-model: llama3
     embedding-model: llama3
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    chat-model: gpt-4o-mini
+    embedding-model: text-embedding-3-small
+  vertex:
+    gemini:
+      project-id: ${VERTEX_GCP_PROJECT_ID:}
+      location: us-central1
+      chat-model: gemini-2.0-flash
   springdoc:
     api-docs-enabled: true
     swagger-ui-enabled: true

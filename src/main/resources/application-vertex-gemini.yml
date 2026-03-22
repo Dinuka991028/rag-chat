@@ -1,0 +1,14 @@
+#################################### Profile: vertex-gemini — Google Vertex AI Gemini (chat) ##########################
+# Activate: --spring.profiles.active=dev,vertex-gemini
+# Prerequisites: gcloud auth application-default login; set VERTEX_GCP_PROJECT_ID (or override conf.vertex.gemini.project-id).
+# Embeddings stay on Ollama by default so kb_documents vectors stay compatible unless you switch embedding-provider and re-seed.
+
+conf:
+  ai:
+    chat-provider: vertexai
+    embedding-provider: ollama
+  vertex:
+    gemini:
+      project-id: ${VERTEX_GCP_PROJECT_ID}
+      location: us-central1
+      chat-model: gemini-2.0-flash

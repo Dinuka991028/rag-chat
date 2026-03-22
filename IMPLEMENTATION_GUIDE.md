@@ -67,7 +67,7 @@ This guide matches **`SPRING_AI_DESIGN.md`** and targets **self-hosted MongoDB**
 | 2. Set **`spring.ai.ollama`** (base URL, chat + embedding models) | Yes |
 | 3. Keep MongoDB under **`spring.data.mongodb`** | Yes |
 | 4. Set **`server.port`** and **`server.servlet.context-path`** | Yes (`8080`, `/ai-chat`) |
-| 5. Wire **`OllamaServiceImpl`** to `spring.ai.ollama.*` (no hardcoded Ollama URL/model) | Yes |
+| 5. Wire **`LlmChatService`** to **`ChatModel`** only (no hardcoded provider URL/model) | Yes |
 | 6. Profiles **`dev`**, **`onsite`**, **`prod`** (`application-*.yml`) | Yes |
 | 7. **`conf:`** block + **`${conf.*}`** placeholders (SRP-style central config) | Yes |
 | 8. Maven **`@activatedProperties@`** → `spring.profiles.active` (`pom.xml` profiles **`dev`** / **`onsite`** / **`prod`**) | Yes |
@@ -121,14 +121,14 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | 1. **`ai_chat.domain.KnowledgeDocument`** — `@Document(collection = "kb_documents")`, Lombok `@Builder` | Yes |
 | 2. Fields: `id`, `content`, `category`, `source`, `embedding` (`List<Float>`) | Yes |
 | 3. **`ai_chat.repository.KnowledgeDocumentRepository`** — `MongoRepository<KnowledgeDocument, String>` | Yes |
-| 4. **`AiChatApplication`** — (superseded in **Phase 6**) now seeds via **`vectorStore.add`** | See Phase 6 |
-| 5. **`OllamaServiceImpl`** — RAG uses **`VectorStore`** (not direct entity loop) | Yes |
+| 4. **`KnowledgeBaseSeedRunner`** — seeds via **`vectorStore.add`** (**`@Profile("!test")`**) | See Phase 6 |
+| 5. **`LlmChatService`** — RAG uses **`VectorStore`** (not direct entity loop) | Yes |
 | 6. ~~**`EmbeddingUpdater`**~~ — removed in **Phase 6** (embed at **`VectorStore.add`**) | N/A |
 | 7. Startup: **`@Order(1)`** seed only | Yes |
 
 **Note:** If an older **`kb_documents`** collection causes mapping errors, drop it or migrate rows, then restart.
 
-**Checkpoint:** Application starts; KB rows are typed entities. (`@SpringBootTest` still loads context.)
+**Checkpoint:** Application starts; KB rows are typed entities. (`@SpringBootTest` with **`test`** profile loads context without Mongo seeding.)
 
 ---
 
@@ -141,7 +141,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 | 1. **`spring-ai-vector-store`** dependency in `pom.xml` | Yes |
 | 2. **`LocalMongoVectorStore`** implements **`VectorStore`** (`add`, `similaritySearch`, `delete` by id; filter-delete unsupported) | Yes |
 | 3. **`VectorStoreConfig`** exposes **`@Bean` `VectorStore`** | Yes |
-| 4. **`OllamaServiceImpl`** RAG path uses **`vectorStore.similaritySearch(SearchRequest)`** (threshold 0.1, topK 1) | Yes |
+| 4. **`LlmChatService`** RAG path uses **`vectorStore.similaritySearch(SearchRequest)`** (threshold 0.1, topK 1) | Yes |
 | 5. Embeddings at seed: **`VectorStore.add`** (**Phase 6**) — no separate **`EmbeddingUpdater`** | Yes |
 | 6. Removed **`VectorSearchService`** (cosine logic lives in **`LocalMongoVectorStore`**) | Yes |
 
@@ -157,7 +157,7 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 | Step | Done |
 |------|------|
-| 1. **`OllamaServiceImpl`** injects **`ChatModel`** (Ollama auto-config) | Yes |
+| 1. **`LlmChatService`** injects **`ChatModel`** (provider from **`conf.ai.chat-provider`**) | Yes |
 | 2. Plain chat: **`Prompt(SystemMessage, UserMessage)`** + **`chatModel.call`** | Yes |
 | 3. RAG: **`VectorStore.similaritySearch`** → **`Prompt`** with **RAG `SystemMessage`** + **`UserMessage`** (excerpts + question) | Yes |
 | 4. Response text via **`ChatResponse.getResult().getOutput().getText()`** | Yes |
@@ -173,38 +173,34 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 | Step | Done |
 |------|------|
-| 1. **`AiChatApplication`** builds Spring AI **`Document`** seeds (`text` + `category` / `source` metadata) | Yes |
+| 1. **`KnowledgeBaseSeedRunner`** builds Spring AI **`Document`** seeds (`text` + `category` / `source` metadata) | Yes |
 | 2. **`vectorStore.add(seeds)`** persists **`KnowledgeDocument`** + **embeddings** via **`LocalMongoVectorStore`** | Yes |
 | 3. **`EmbeddingUpdater`** **removed** (no second runner) | Yes |
-| 4. Single **`CommandLineRunner`** — **`@Order(1)`** on **`AiChatApplication`** | Yes |
+| 4. Single **`CommandLineRunner`** — **`@Order(1)`** on **`KnowledgeBaseSeedRunner`** (**`!test`**) | Yes |
 
 **Checkpoint:** Empty KB → startup inserts all chunks **with embeddings**; RAG works without a separate embedding pass.
 
 ---
 
-## Phase 7 — Plug-and-play second LLM (e.g. OpenAI)
+## Phase 7 — Plug-and-play second LLM (e.g. OpenAI) — **done**
 
-1. Add the starter your org allows, e.g. **`spring-ai-starter-model-openai`** (BOM version only).
+1. **`pom.xml`** — starters on the classpath (same BOM): **`spring-ai-starter-model-ollama`**, **`spring-ai-starter-model-openai`**, **`spring-ai-starter-model-vertex-ai-gemini`**. Spring AI picks **`ChatModel`** / **`EmbeddingModel`** from **`spring.ai.model.chat`** / **`spring.ai.model.embedding`** (**`conf.ai.chat-provider`** / **`conf.ai.embedding-provider`**). **`application.yml`** excludes non-chat OpenAI auto-configurations (speech, transcription, image, moderation) so an empty **`OPENAI_API_KEY`** is valid when chat/embeddings use Ollama; remove those excludes if you enable those APIs and set a key.
 
-2. Add **API keys** via environment variables or a secrets manager — **never** commit keys.
+2. **Secrets** — **`conf.openai.api-key`** defaults to **`${OPENAI_API_KEY:}`** in base config (empty is fine when both providers are **ollama**). Profile **`openai`** uses **`${OPENAI_API_KEY}`** (required when chat is OpenAI). Never commit keys.
 
-3. Use **`spring.profiles.active=openai`** (example) with:
+3. **Profiles** — **`application-openai.yml`** (**`openai`**) sets **`conf.ai.chat-provider: openai`**. **`application-vertex-gemini.yml`** (**`vertex-gemini`**) sets **`chat-provider: vertexai`** and GCP **`conf.vertex.gemini.*`**. Activate e.g. **`--spring.profiles.active=dev,openai`** or **`dev,vertex-gemini`**. Keep **`embedding-provider: ollama`** when you want existing **`kb_documents`** vectors unchanged.
 
-   - `application-openai.properties` — OpenAI base URL, model names, etc.
+4. **Switching embedding to OpenAI** — Change **`conf.ai.embedding-provider`** to **`openai`** and **re-seed** the KB (empty collection or migrate / re-embed), because stored vectors must use the same embedding space as **`EmbeddingModel`**.
 
-4. Use **`@Profile("ollama")`** / **`@Profile("openai")`** on `@Configuration` classes that declare **`@Bean` `ChatModel`** / **`EmbeddingModel`** **only if** auto-configuration does not already switch on properties. Often **property-driven** single starter is enough:
+5. **Security review:** egress allowlists, logging (no full prompts if policy forbids), API key rotation.
 
-   - Prefer **one active provider per environment** to avoid two primary `ChatModel` beans.
-
-5. **Security review:** endpoints, egress allowlists, logging (no full prompts in logs if policy forbids).
-
-**Checkpoint:** Same `RagChatService` code path; only configuration changes between Ollama and OpenAI in a non-prod environment.
+**Checkpoint:** Same service code (**`LlmChatService`** + **`ChatModel`**); only **`conf.ai.*`**, credentials, and optional Spring profiles (**`openai`**, **`vertex-gemini`**, …) change the LLM adapter.
 
 ---
 
 ## Phase 8 — Cleanup and hardening
 
-1. **Delete** unused classes: old `OllamaServiceImpl` if fully renamed; **`VectorSearchService`** already removed (**Phase 4**).
+1. **Delete** unused classes if any remain; **`VectorSearchService`** already removed (**Phase 4**).
 2. **Keep** `AIService` interface only if it still adds clarity; otherwise use `RagChatService` + `PlainChatService` names.
 3. **Update** **`ARCHITECTURE.md`** to match the new flow.
 4. **Government / security:** TLS to MongoDB, auth, network rules, backup/restore of `kb_documents`, audit trail for admin updates to KB.
@@ -215,11 +211,11 @@ This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, 
 
 | Item | Action |
 |------|--------|
-| `pom.xml` | BOM + `spring-ai-starter-model-ollama`; optional OpenAI starter later |
+| `pom.xml` | BOM + Ollama + OpenAI + Vertex Gemini starters (Phase 7); pick provider in **`conf.ai.*`** |
 | `application.yml` + `application-*.yml` | `conf:` + `${conf.*}`; Maven `@activatedProperties@`; per-profile `conf` overrides |
 | New | `KnowledgeDocument` + repo (**Phase 3**); **`LocalMongoVectorStore`** + **`spring-ai-vector-store`** (**Phase 4**); later: `ChatModel` + slim RAG service (**Phase 5**) |
-| Refactor | **`ChatModel`** in `OllamaServiceImpl` (**Phase 5**); optional rename to `ChatAiService` later |
-| Seed | `AiChatApplication` / runner → `vectorStore.add` |
+| Refactor | **`ChatModel`** in **`LlmChatService`** (**Phase 5**) — provider-neutral name |
+| Seed | `KnowledgeBaseSeedRunner` → `vectorStore.add` |
 | Remove | ~~`EmbeddingUpdater`~~ removed (**Phase 6**) |
 
 ---
