@@ -1,8 +1,11 @@
 package ai_chat.service.impl;
 
+import ai_chat.domain.KnowledgeDocument;
+import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.service.AIService;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -15,14 +18,33 @@ public class OllamaServiceImpl implements AIService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    @Value("${spring.ai.ollama.base-url:http://localhost:11434}")
+    private String ollamaBaseUrl;
+
+    @Value("${spring.ai.ollama.chat.options.model:llama3}")
+    private String chatModel;
+
+    @Value("${spring.ai.ollama.embedding.options.model:llama3}")
+    private String embeddingModel;
+
     @Autowired
     private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private KnowledgeDocumentRepository knowledgeDocumentRepository;
+
+    private String ollamaApiPath(String path) {
+        String base = ollamaBaseUrl.endsWith("/")
+                ? ollamaBaseUrl.substring(0, ollamaBaseUrl.length() - 1)
+                : ollamaBaseUrl;
+        return base + path;
+    }
 
     // ✅ 1. BASIC AI CALL (WITH SSRP SYSTEM PROMPT)
     @Override
     public String askAI(String prompt) {
 
-        String url = "http://localhost:11434/api/generate";
+        String url = ollamaApiPath("/api/generate");
 
         String systemPrompt =
                 "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. " +
@@ -30,7 +52,7 @@ public class OllamaServiceImpl implements AIService {
                         "Answer clearly and briefly.";
 
         Map<String, Object> request = new HashMap<>();
-        request.put("model", "llama3");
+        request.put("model", chatModel);
         request.put("prompt", systemPrompt + "\n\nCustomer: " + prompt);
         request.put("stream", false);
 
@@ -47,7 +69,7 @@ public class OllamaServiceImpl implements AIService {
     @Override
     public String askAIWithContext(String prompt) {
 
-        List<Document> docs = mongoTemplate.findAll(Document.class, "kb_documents");
+        List<KnowledgeDocument> docs = knowledgeDocumentRepository.findAll();
 
         if (docs.isEmpty()) {
             return "Knowledge base is empty.";
@@ -55,17 +77,11 @@ public class OllamaServiceImpl implements AIService {
 
         List<Float> queryEmbedding = getEmbedding(prompt);
 
-        // ✅ Use list to handle duplicates safely
         List<ScoredDoc> scoredDocs = new ArrayList<>();
 
-        for (Document doc : docs) {
-            List<Number> embeddingNums = (List<Number>) doc.get("embedding");
-            if (embeddingNums == null) continue;
-
-            List<Float> embedding = new ArrayList<>();
-            for (Number n : embeddingNums) {
-                embedding.add(n.floatValue());
-            }
+        for (KnowledgeDocument doc : docs) {
+            List<Float> embedding = doc.getEmbedding();
+            if (embedding == null || embedding.isEmpty()) continue;
 
             if (embedding.size() != queryEmbedding.size()) continue;
 
@@ -79,11 +95,9 @@ public class OllamaServiceImpl implements AIService {
             scoredDocs.add(new ScoredDoc(cosineSim, doc));
         }
 
-        // Sort descending by similarity
         scoredDocs.sort((a, b) -> Double.compare(b.score, a.score));
 
-        // Pick top 3 docs above threshold
-        List<Document> topDocs = new ArrayList<>();
+        List<KnowledgeDocument> topDocs = new ArrayList<>();
         double bestScore = 0.0;
         for (ScoredDoc sd : scoredDocs) {
             if (sd.score < 0.1) break;
@@ -92,7 +106,6 @@ public class OllamaServiceImpl implements AIService {
             if (topDocs.size() >= 1) break;
         }
 
-        // ❗ Fallback if no good match
         if (topDocs.isEmpty() || bestScore < 0.1) {
             Document unknown = new Document();
             unknown.put("question", prompt);
@@ -110,8 +123,8 @@ public class OllamaServiceImpl implements AIService {
 
         // Build context (limit to 3 docs to avoid token overflow)
         StringBuilder context = new StringBuilder();
-        for (Document d : topDocs) {
-            String content = d.getString("content");
+        for (KnowledgeDocument d : topDocs) {
+            String content = d.getContent();
             if (content != null) context.append(content).append("\n\n");
         }
 
@@ -137,9 +150,9 @@ public class OllamaServiceImpl implements AIService {
     // Helper class to safely hold score + document
     private static class ScoredDoc {
         double score;
-        Document doc;
+        KnowledgeDocument doc;
 
-        public ScoredDoc(double score, Document doc) {
+        ScoredDoc(double score, KnowledgeDocument doc) {
             this.score = score;
             this.doc = doc;
         }
@@ -148,10 +161,10 @@ public class OllamaServiceImpl implements AIService {
     // ✅ 3. EMBEDDING GENERATION
     public List<Float> getEmbedding(String text) {
 
-        String url = "http://localhost:11434/api/embeddings";
+        String url = ollamaApiPath("/api/embeddings");
 
         Map<String, Object> request = new HashMap<>();
-        request.put("model", "llama3");
+        request.put("model", embeddingModel);
         request.put("prompt", text);
 
         HttpHeaders headers = new HttpHeaders();

@@ -1,0 +1,30 @@
+# On-premises / government network — set hosts via environment (or replace defaults)
+
+spring:
+  data:
+    mongodb:
+      host: ${MONGO_HOST:localhost}
+      port: ${MONGO_PORT:27017}
+      database: ${MONGO_DATABASE:ai}
+      # Optional: use URI instead of host/port (uncomment and set MONGODB_URI)
+      # uri: ${MONGODB_URI:}
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:llama3}
+      embedding:
+        options:
+          model: ${OLLAMA_EMBEDDING_MODEL:llama3}
+
+logging:
+  level:
+    root: INFO
+    ai_chat: INFO
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

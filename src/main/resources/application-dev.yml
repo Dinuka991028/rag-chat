@@ -1,0 +1,27 @@
+# Local development — MongoDB + Ollama on localhost
+
+spring:
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: ai
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: llama3
+      embedding:
+        options:
+          model: llama3
+
+logging:
+  level:
+    ai_chat: DEBUG
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

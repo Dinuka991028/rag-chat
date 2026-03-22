@@ -1,0 +1,13 @@
+# Shared settings. Environment-specific values live in application-{profile}.yml
+# Activate: --spring.profiles.active=dev|onsite|prod  (default profile: dev)
+
+spring:
+  application:
+    name: ai-chat
+  profiles:
+    default: dev
+
+server:
+  port: 8080
+  servlet:
+    context-path: /ai-chat
