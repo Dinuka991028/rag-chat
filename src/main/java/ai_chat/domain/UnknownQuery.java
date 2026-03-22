@@ -21,4 +21,7 @@ public class UnknownQuery {
     private String question;
 
     private Date createdAt;
+
+    /** Present when the question came from {@code /chat/rag/conversation}. */
+    private String conversationId;
 }

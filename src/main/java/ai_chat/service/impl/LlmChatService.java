@@ -1,7 +1,9 @@
 package ai_chat.service.impl;
 
+import ai_chat.domain.UnknownQuery;
 import ai_chat.dto.ChatConversationResponse;
 import ai_chat.repository.KnowledgeDocumentRepository;
+import ai_chat.repository.UnknownQueryRepository;
 import ai_chat.service.ChatService;
 import ai_chat.service.ConversationHistoryService;
 import org.springframework.ai.chat.messages.Message;
@@ -14,7 +16,6 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -58,7 +59,7 @@ public class LlmChatService implements ChatService {
     private ChatModel chatModel;
 
     @Autowired
-    private MongoTemplate mongoTemplate;
+    private UnknownQueryRepository unknownQueryRepository;
 
     @Autowired
     private VectorStore vectorStore;
@@ -91,7 +92,11 @@ public class LlmChatService implements ChatService {
             logUnknownQuery(prompt, null);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         }
-        return generateRagAnswer(found, prompt, List.of());
+        String reply = generateRagAnswer(found, prompt, List.of());
+        if (isRagInsufficientReply(reply)) {
+            logUnknownQuery(prompt, null);
+        }
+        return reply;
     }
 
     @Override
@@ -134,6 +139,9 @@ public class LlmChatService implements ChatService {
                     "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         } else {
             reply = generateRagAnswer(found, message, history);
+            if (isRagInsufficientReply(reply)) {
+                logUnknownQuery(message, id);
+            }
         }
         conversationHistoryService.append(id, message, reply);
         return new ChatConversationResponse(id, reply);
@@ -173,15 +181,27 @@ public class LlmChatService implements ChatService {
         }
     }
 
-    private void logUnknownQuery(String question, String conversationId) {
-        org.bson.Document unknown = new org.bson.Document();
-        unknown.put("question", question);
-        unknown.put("createdAt", new Date());
-        if (conversationId != null && !conversationId.isBlank()) {
-            unknown.put("conversationId", conversationId);
+    /**
+     * True when the model followed the RAG system prompt and declined because excerpts were insufficient
+     * (same situation we want in {@code unknown_queries} as when retrieval returned nothing).
+     */
+    static boolean isRagInsufficientReply(String reply) {
+        if (reply == null || reply.isBlank()) {
+            return false;
         }
+        String t = reply.trim();
+        return t.contains("have enough information to answer that right now");
+    }
+
+    private void logUnknownQuery(String question, String conversationId) {
         try {
-            mongoTemplate.insert(unknown, "unknown_queries");
+            UnknownQuery row = new UnknownQuery();
+            row.setQuestion(question);
+            row.setCreatedAt(new Date());
+            if (conversationId != null && !conversationId.isBlank()) {
+                row.setConversationId(conversationId);
+            }
+            unknownQueryRepository.save(row);
         } catch (Exception e) {
             System.err.println("Failed to save unknown query: " + e.getMessage());
         }
