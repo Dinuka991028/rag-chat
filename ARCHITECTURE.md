@@ -42,6 +42,7 @@ HTTP (JSON/text)
         → ChatService (interface)
             → LlmChatService
                 → ChatModel (Spring AI — provider from config) + VectorStore (LocalMongoVectorStore)
+                → ConversationHistoryService (in-memory sessions for `/chat/conversation` and `/chat/rag/conversation`)
                 → MongoTemplate / KnowledgeDocumentRepository → MongoDB
 ```
 
@@ -62,8 +63,10 @@ Supporting pieces:
 | `domain.KnowledgeDocument` | Typed Mongo entity for **`kb_documents`** |
 | `repository.KnowledgeDocumentRepository` | `MongoRepository` for KB CRUD |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
-| `service.ChatService` | Contract: `askAI`, `askAIWithContext` |
-| `service.impl.LlmChatService` | **`ChatModel`** only (no provider imports) + RAG via **`VectorStore`** |
+| `service.ChatService` | Contract: plain + RAG; plus conversation variants returning **`ChatConversationResponse`** |
+| `service.impl.LlmChatService` | **`ChatModel`** + RAG via **`VectorStore`**; merges short-term history into prompts and retrieval query |
+| `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
+| `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
 | `config.VectorStoreConfig` | **`VectorStore`** bean |
 | `config.OpenApiConfig` | OpenAPI metadata for Swagger |
@@ -76,8 +79,17 @@ Supporting pieces:
 |---------------|------|----------|
 | `POST /ai-chat/chat` | Raw string (message) | Calls **`askAI`**: system prompt for SSRP + user message → **`ChatModel`** — **no** KB retrieval. |
 | `POST /ai-chat/chat/rag` | Raw string (message) | Calls **`askAIWithContext`**: embed query, retrieve similar KB docs, then **generate** with KB-only instructions. |
+| `POST /ai-chat/chat/conversation` | JSON `{"message":"…","conversationId":"…"}` — `conversationId` optional | Plain chat with **short-term history**: prior turns + current message. Response JSON: **`conversationId`**, **`reply`**. |
+| `POST /ai-chat/chat/rag/conversation` | Same JSON shape | RAG with history: retrieval uses a **combined query** when the latest message is short (e.g. “yes”) so it aligns with the **previous user** line; generation sees history + KB excerpts. |
 
 Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e.g. **`http://localhost:8080/ai-chat/swagger-ui.html`**).
+
+### Short-term chat history (design)
+
+- **Sessions** are keyed by **`conversationId`** (UUID generated server-side when the client omits it on the first request; client sends it back on later requests).
+- **Storage** is **in-memory in the JVM** (`ConversationHistoryService`). It is **not** shared across replicas or restarts — for horizontal scaling or durable chat, replace with Redis or Mongo-backed storage using the same interface.
+- **Limits** — **`conf.chat.history-max-messages`** (default **20** messages = up to 10 user/assistant pairs) and **`conf.chat.history-session-ttl-hours`** (default **24**): idle sessions are evicted to cap memory use.
+- **RAG follow-ups** — If the latest user text is shorter than **80** characters, **`LlmChatService.buildRetrievalQuery`** concatenates it with the **most recent prior user message** in history for **`similaritySearch`** only; the **customer question** line in the KB payload remains the actual latest message.
 
 ---
 
@@ -87,11 +99,11 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
-3. **Similarity search** — **`VectorStore.similaritySearch(SearchRequest)`** scores stored embeddings with **cosine similarity**, applies **`similarityThreshold`** (0.1) and **`topK`** (1), returns Spring AI **`Document`** results.
+3. **Similarity search** — **`VectorStore.similaritySearch(SearchRequest)`** scores stored embeddings with **cosine similarity** (threshold and fetch pool configured in **`LlmChatService`**), returns Spring AI **`Document`** results; curated FAQ chunks are merged with SRS chunks up to a configured cap.
 
 4. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
 
-   - A record may be inserted into collection **`unknown_queries`** (question + timestamp).
+   - A record may be inserted into collection **`unknown_queries`** (**`question`**, **`createdAt`**, optional **`conversationId`** when the request used a conversation endpoint).
    - The user gets a fixed “not enough information” style message.
 
 5. **Grounded generation** — Retrieved excerpts are sent in a **`UserMessage`**; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
@@ -104,12 +116,14 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 `askAI` calls **`chatModel.call(new Prompt(new SystemMessage(SSRP…), new UserMessage(message)))`** and returns the assistant text from **`ChatResponse`** (no `RestTemplate`).
 
+**With history** — `askAIWithHistory` builds **`Prompt(SystemMessage, …history, UserMessage(latest))`** after loading a snapshot from **`ConversationHistoryService`**, then appends the user/assistant pair for the next turn.
+
 ---
 
 ## Data model (MongoDB)
 
 - **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time).
-- **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr).
+- **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr). Documents may include **`conversationId`** for requests from **`/chat/rag/conversation`**.
 
 ---
 
@@ -117,7 +131,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 `src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
-- **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits.
+- **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits, **`conf.chat.history-max-messages`** and **`conf.chat.history-session-ttl-hours`** for conversation endpoints.
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
 - **`spring.ai.ollama.*`**, **`spring.ai.openai.*`**, **`spring.ai.vertex.ai.gemini.*`** map from **`conf.ollama.*`**, **`conf.openai.*`**, **`conf.vertex.gemini.*`**. **`LlmChatService`** injects **`ChatModel`** only — switching **`conf.ai.chat-provider`** swaps the adapter (Ollama, OpenAI, Vertex Gemini, …) with no code change.
@@ -142,4 +156,4 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Summary
 
-**rag-chat** is a **Spring Boot 3** service that exposes **chat** and **RAG chat** endpoints, uses **MongoDB** with **`KnowledgeDocument`** + **`VectorStore`**, and uses Spring AI **`ChatModel`** + **`EmbeddingModel`** (provider chosen in **`conf.ai.*`**) with **OpenAPI/Swagger** for API exploration.
+**rag-chat** is a **Spring Boot 3** service that exposes **chat**, **RAG chat**, and optional **conversation** endpoints (short-term in-memory history), uses **MongoDB** with **`KnowledgeDocument`** + **`VectorStore`**, and uses Spring AI **`ChatModel`** + **`EmbeddingModel`** (provider chosen in **`conf.ai.*`**) with **OpenAPI/Swagger** for API exploration.

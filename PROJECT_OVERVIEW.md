@@ -12,6 +12,7 @@ This document explains **what this service does**, **how it is built**, and **ho
 |------------|-------------------|
 | **Plain chat** | Answers using a general “government portal assistant” style (SSRP-themed prompts). |
 | **RAG chat** | Answers using a **retrieved** slice of your **knowledge base** stored in **MongoDB**, so responses can be grounded in approved content. |
+| **Multi-turn (optional)** | **`/chat/conversation`** and **`/chat/rag/conversation`** keep **short-term** dialogue per **`conversationId`** (in-memory in the service JVM) so follow-ups like “yes” stay in context. |
 
 “RAG” = *retrieval-augmented generation*: we **search** for relevant text, then ask the LLM to answer **only** from that text.
 
@@ -109,8 +110,10 @@ Base path includes context path **`/ai-chat`** (see `conf.server.context-path`).
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/ai-chat/chat` | Plain chat. |
-| POST | `/ai-chat/chat/rag` | RAG chat. |
+| POST | `/ai-chat/chat` | Plain chat (raw string body). |
+| POST | `/ai-chat/chat/rag` | RAG chat (raw string body). |
+| POST | `/ai-chat/chat/conversation` | Plain chat with **JSON** (`message`, optional `conversationId`); response includes **`conversationId`** for the next turn. |
+| POST | `/ai-chat/chat/rag/conversation` | RAG chat with the same session model; short follow-ups are combined with prior user text for retrieval. |
 
 Swagger UI is available in dev when enabled (disabled in production profile by default).
 

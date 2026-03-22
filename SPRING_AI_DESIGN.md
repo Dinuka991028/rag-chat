@@ -123,6 +123,10 @@ You rarely need a hand-written “abstract factory” class; **`@Bean` methods**
 
 A thin **`ChatService`** or **`RagService`** that composes `ChatModel`, `EmbeddingModel`, and `VectorStore` behind one method (`answer(userMessage)`) keeps controllers dumb and tests easy (mock the three ports).
 
+### Short-term dialogue (implemented in this repo)
+
+**`ConversationHistoryService`** stores recent **`UserMessage` / `AssistantMessage`** pairs per **`conversationId`** (in-memory, capped and TTL’d via **`conf.chat`**). **`LlmChatService`** prepends that list to the **`Prompt`** before the current turn so multi-turn clarification works; on the RAG path it also **rewrites the retrieval query** for short follow-ups (see **`ARCHITECTURE.md`**). Swap the session store if you need multiple app instances or persistence.
+
 ### **Anti-pattern to avoid**
 
 A single giant class with `if (provider == OLLAMA)` branches. Prefer **one bean per provider** or **starters** so the **container** selects the implementation.

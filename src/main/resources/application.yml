@@ -131,6 +131,10 @@ conf:
   admin:
     enabled: true
     api-key: ${ADMIN_API_KEY:}
+  # Short-term chat history (in-memory per JVM; see ARCHITECTURE.md).
+  chat:
+    history-max-messages: 20
+    history-session-ttl-hours: 24
   # RAG KB: curated FAQ snippets (code) + SRS. Prefer kb/ssrp-srs-llm.md (LLM-friendly) over PDF when present.
   kb:
     srs-pdf-enabled: true

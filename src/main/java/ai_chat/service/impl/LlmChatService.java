@@ -1,7 +1,10 @@
 package ai_chat.service.impl;
 
+import ai_chat.dto.ChatConversationResponse;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.service.ChatService;
+import ai_chat.service.ConversationHistoryService;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -32,6 +35,9 @@ public class LlmChatService implements ChatService {
     private static final int RAG_CURATED_CAP = 5;
     private static final int RAG_TOP_K = 8;
 
+    /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
+    private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
+
     private static final String SYSTEM_PLAIN =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
                     + "Always respond in a polite, formal, and helpful tone suitable for a government service. "
@@ -60,6 +66,9 @@ public class LlmChatService implements ChatService {
     @Autowired
     private KnowledgeDocumentRepository knowledgeDocumentRepository;
 
+    @Autowired
+    private ConversationHistoryService conversationHistoryService;
+
     @Override
     public String askAI(String prompt) {
         try {
@@ -74,34 +83,74 @@ public class LlmChatService implements ChatService {
 
     @Override
     public String askAIWithContext(String prompt) {
-
         if (knowledgeDocumentRepository.count() == 0) {
             return "Knowledge base is empty.";
         }
-
-        List<Document> raw = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(prompt)
-                        .topK(RAG_FETCH_POOL)
-                        .similarityThreshold(RAG_SIMILARITY_THRESHOLD)
-                        .build());
-
-        List<Document> found = mergeCuratedWithSrs(raw, RAG_CURATED_CAP, RAG_TOP_K);
-
-        if (found == null || found.isEmpty()) {
-            org.bson.Document unknown = new org.bson.Document();
-            unknown.put("question", prompt);
-            unknown.put("createdAt", new Date());
-
-            try {
-                mongoTemplate.insert(unknown, "unknown_queries");
-            } catch (Exception e) {
-                System.err.println("Failed to save unknown query: " + e.getMessage());
-            }
-
+        List<Document> found = retrieveMerged(prompt);
+        if (found.isEmpty()) {
+            logUnknownQuery(prompt, null);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         }
+        return generateRagAnswer(found, prompt, List.of());
+    }
 
+    @Override
+    public ChatConversationResponse askAIWithHistory(String conversationId, String message) {
+        String id = conversationHistoryService.resolveOrCreateConversationId(conversationId);
+        List<Message> history = conversationHistoryService.snapshot(id);
+        String reply;
+        try {
+            List<Message> messages = new ArrayList<>();
+            messages.add(new SystemMessage(SYSTEM_PLAIN));
+            messages.addAll(history);
+            messages.add(new UserMessage(message));
+            ChatResponse response = chatModel.call(new Prompt(messages));
+            reply = extractAssistantText(response);
+        } catch (Exception e) {
+            System.err.println("Chat model error: " + e.getMessage());
+            reply = "Sorry, the AI service is temporarily unavailable. Please try again later.";
+        }
+        conversationHistoryService.append(id, message, reply);
+        return new ChatConversationResponse(id, reply);
+    }
+
+    @Override
+    public ChatConversationResponse askAIWithContextAndHistory(String conversationId, String message) {
+        String id = conversationHistoryService.resolveOrCreateConversationId(conversationId);
+        List<Message> history = conversationHistoryService.snapshot(id);
+
+        if (knowledgeDocumentRepository.count() == 0) {
+            String reply = "Knowledge base is empty.";
+            conversationHistoryService.append(id, message, reply);
+            return new ChatConversationResponse(id, reply);
+        }
+
+        String retrievalQuery = buildRetrievalQuery(history, message);
+        List<Document> found = retrieveMerged(retrievalQuery);
+        String reply;
+        if (found.isEmpty()) {
+            logUnknownQuery(message, id);
+            reply =
+                    "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
+        } else {
+            reply = generateRagAnswer(found, message, history);
+        }
+        conversationHistoryService.append(id, message, reply);
+        return new ChatConversationResponse(id, reply);
+    }
+
+    private List<Document> retrieveMerged(String retrievalQuery) {
+        List<Document> raw =
+                vectorStore.similaritySearch(
+                        SearchRequest.builder()
+                                .query(retrievalQuery)
+                                .topK(RAG_FETCH_POOL)
+                                .similarityThreshold(RAG_SIMILARITY_THRESHOLD)
+                                .build());
+        return mergeCuratedWithSrs(raw, RAG_CURATED_CAP, RAG_TOP_K);
+    }
+
+    private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent) {
         StringBuilder context = new StringBuilder();
         for (Document d : found) {
             String text = d.getText();
@@ -109,18 +158,64 @@ public class LlmChatService implements ChatService {
                 context.append(text).append("\n\n");
             }
         }
-
         String userPayload =
-                "Knowledge base excerpts:\n\n" + context + "\nCustomer question: " + prompt;
-
+                "Knowledge base excerpts:\n\n" + context + "\nCustomer question: " + customerQuestion;
         try {
-            ChatResponse response = chatModel.call(
-                    new Prompt(new SystemMessage(SYSTEM_RAG), new UserMessage(userPayload)));
+            List<Message> messages = new ArrayList<>();
+            messages.add(new SystemMessage(SYSTEM_RAG));
+            messages.addAll(historyBeforeCurrent);
+            messages.add(new UserMessage(userPayload));
+            ChatResponse response = chatModel.call(new Prompt(messages));
             return extractAssistantText(response);
         } catch (Exception e) {
             System.err.println("Chat model error: " + e.getMessage());
             return "Sorry, the AI service is temporarily unavailable. Please try again later.";
         }
+    }
+
+    private void logUnknownQuery(String question, String conversationId) {
+        org.bson.Document unknown = new org.bson.Document();
+        unknown.put("question", question);
+        unknown.put("createdAt", new Date());
+        if (conversationId != null && !conversationId.isBlank()) {
+            unknown.put("conversationId", conversationId);
+        }
+        try {
+            mongoTemplate.insert(unknown, "unknown_queries");
+        } catch (Exception e) {
+            System.err.println("Failed to save unknown query: " + e.getMessage());
+        }
+    }
+
+    /**
+     * For short follow-ups, combine with the most recent prior user message in history so vector search is not only "yes".
+     */
+    static String buildRetrievalQuery(List<Message> history, String latestUser) {
+        if (latestUser == null) {
+            return "";
+        }
+        String u = latestUser.trim();
+        if (u.isEmpty()) {
+            return u;
+        }
+        if (u.length() >= RETRIEVAL_QUERY_COMBINE_MAX_LEN) {
+            return u;
+        }
+        String prev = lastUserContentInHistory(history);
+        if (prev != null && !prev.isBlank()) {
+            return (prev + " " + u).trim();
+        }
+        return u;
+    }
+
+    private static String lastUserContentInHistory(List<Message> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Message m = history.get(i);
+            if (m instanceof UserMessage) {
+                return ((UserMessage) m).getText();
+            }
+        }
+        return null;
     }
 
     private static String extractAssistantText(ChatResponse response) {
