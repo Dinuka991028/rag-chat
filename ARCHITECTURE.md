@@ -22,7 +22,7 @@ This document describes the **technology stack**, **layered architecture**, and 
 - **MongoDB** — default: `localhost:27017`, database `ai` (`application.yml`).
 - **Ollama** — default: `http://localhost:11434` with models from `spring.ai.ollama.*` (e.g. `llama3` for chat and embeddings).
 - **HTTP** — default: port **8080**, context path **`/ai-chat`** (see `server.*` in `application.yml`).
-- **Profiles** — **`dev`** (default), **`onsite`**, **`prod`**: see `application-dev.yml`, `application-onsite.yml`, `application-prod.yml`. `prod` disables Swagger UI by default.
+- **Profiles** — **`dev`**, **`onsite`**, **`prod`**: `application-{profile}.yml` overrides the central **`conf:`** map. Active profile is set via Maven-filtered **`spring.profiles.active`** (`@activatedProperties@` in `application.yml`) or `--spring.profiles.active`. **`prod`** disables Swagger UI by default.
 
 ---
 
@@ -109,11 +109,12 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Configuration
 
-`src/main/resources/application.yml` plus **`application-{profile}.yml`**:
+`src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
-- **`application.yml`** — default profile `dev`, server port, context path.
-- **`spring.data.mongodb`** / **`spring.ai.ollama`** — defined per profile (`dev` = localhost; `onsite` / `prod` use env vars such as `MONGO_HOST`, `OLLAMA_BASE_URL`).
-- **`OllamaServiceImpl`** reads `spring.ai.ollama.*` via `@Value` for `RestTemplate` calls to Ollama.
+- **`conf:`** — single place for app name, server port/context-path, Mongo, Ollama models/URL, springdoc toggles, logging levels, multipart limits.
+- Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
+- Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
+- **`OllamaServiceImpl`** still reads **`spring.ai.ollama.*`** (populated from `conf.ollama.*`).
 
 ---
 

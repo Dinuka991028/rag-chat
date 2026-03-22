@@ -1,13 +1,89 @@
-# Shared settings. Environment-specific values live in application-{profile}.yml
-# Activate: --spring.profiles.active=dev|onsite|prod  (default profile: dev)
-
+#################################### Spring (shared wiring - values from conf: below) ####################################
 spring:
   application:
-    name: ai-chat
+    name: ${conf.application.name}
   profiles:
-    default: dev
-
-server:
-  port: 8080
+    active: @activatedProperties@
+  banner:
+    location: classpath:banner/banner.txt
+  main:
+    allow-bean-definition-overriding: ${conf.main.allow-bean-definition-overriding:true}
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
   servlet:
-    context-path: /ai-chat
+    multipart:
+      enabled: ${conf.multipart.enabled:true}
+      file-size-threshold: ${conf.multipart.file-size-threshold:2KB}
+      max-file-size: ${conf.multipart.max-file-size:200MB}
+      max-request-size: ${conf.multipart.max-request-size:215MB}
+  data:
+    mongodb:
+      host: ${conf.mongodb.host}
+      port: ${conf.mongodb.port}
+      database: ${conf.mongodb.database}
+  ai:
+    ollama:
+      base-url: ${conf.ollama.base-url}
+      chat:
+        options:
+          model: ${conf.ollama.chat-model}
+      embedding:
+        options:
+          model: ${conf.ollama.embedding-model}
+#################################### / Spring ##########################################################################
+
+#################################### Server ############################################################################
+server:
+  port: ${conf.server.port}
+  servlet:
+    context-path: /${conf.server.context-path}
+#################################### / Server ##########################################################################
+
+#################################### springdoc #########################################################################
+springdoc:
+  api-docs:
+    enabled: ${conf.springdoc.api-docs-enabled}
+  swagger-ui:
+    enabled: ${conf.springdoc.swagger-ui-enabled}
+#################################### / springdoc #######################################################################
+
+#################################### Logging ###########################################################################
+logging:
+  level:
+    root: ${conf.logging.level.root}
+    ai_chat: ${conf.logging.level.ai-chat}
+    org.springframework.web: ${conf.logging.level.org-springframework-web:INFO}
+#################################### / Logging #########################################################################
+
+#################################### Central configuration (override in application-{profile}.yml) #####################
+conf:
+  application:
+    name: ai-chat
+  main:
+    allow-bean-definition-overriding: true
+  multipart:
+    enabled: true
+    file-size-threshold: 2KB
+    max-file-size: 200MB
+    max-request-size: 215MB
+  server:
+    port: 8080
+    context-path: ai-chat
+  mongodb:
+    host: localhost
+    port: 27017
+    database: ai
+  ollama:
+    base-url: http://localhost:11434
+    chat-model: llama3
+    embedding-model: llama3
+  springdoc:
+    api-docs-enabled: true
+    swagger-ui-enabled: true
+  logging:
+    level:
+      root: INFO
+      ai-chat: DEBUG
+      org-springframework-web: INFO
+#################################### / conf ############################################################################

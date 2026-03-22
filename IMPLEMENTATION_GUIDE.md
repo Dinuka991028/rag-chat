@@ -69,8 +69,10 @@ This guide matches **`SPRING_AI_DESIGN.md`** and targets **self-hosted MongoDB**
 | 4. Set **`server.port`** and **`server.servlet.context-path`** | Yes (`8080`, `/ai-chat`) |
 | 5. Wire **`OllamaServiceImpl`** to `spring.ai.ollama.*` (no hardcoded Ollama URL/model) | Yes |
 | 6. Profiles **`dev`**, **`onsite`**, **`prod`** (`application-*.yml`) | Yes |
+| 7. **`conf:`** block + **`${conf.*}`** placeholders (SRP-style central config) | Yes |
+| 8. Maven **`@activatedProperties@`** → `spring.profiles.active` (`pom.xml` profiles **`dev`** / **`onsite`** / **`prod`**) | Yes |
 
-**URLs:** API base is `http://localhost:8080/ai-chat` (e.g. `POST /ai-chat/chat`, `POST /ai-chat/chat/rag`). Swagger UI follows the context path (e.g. `/ai-chat/swagger-ui.html`).
+**URLs:** API base is `http://localhost:8080/ai-chat` (defaults from `conf.server.*`; e.g. `POST /ai-chat/chat`, `POST /ai-chat/chat/rag`). Swagger: `/ai-chat/swagger-ui.html`.
 
 ### Spring profiles — **done — 2026-03-22**
 
@@ -80,15 +82,11 @@ This guide matches **`SPRING_AI_DESIGN.md`** and targets **self-hosted MongoDB**
 | **`onsite`** | `application-onsite.yml` | On-premises / gov network; Mongo & Ollama via **env** (see below); Swagger enabled |
 | **`prod`** | `application-prod.yml` | Production; env-driven URLs/models; **Swagger disabled**; quieter logging |
 
-**Activate:**
+**Activate Spring profile:**
 
-```bash
-# default is dev (no flag needed)
-java -jar app.jar
-
-java -jar app.jar --spring.profiles.active=onsite
-java -jar app.jar --spring.profiles.active=prod
-```
+- **Maven build:** `spring.profiles.active` is set from **`@activatedProperties@`** in `application.yml` (filtered at build time). Use e.g. `mvn package -Pprod` or `-Ponsite` (default Maven profile is **`dev`**).
+- **Runtime override:** `java -jar app.jar --spring.profiles.active=prod`
+- **IDE:** enable **Delegate build/run to Maven** (or run `mvn process-resources` so `@activatedProperties@` is replaced); otherwise the unfiltered token can break profile activation.
 
 **Environment variables (typical for `onsite` / `prod`):**
 
@@ -102,12 +100,13 @@ java -jar app.jar --spring.profiles.active=prod
 | `OLLAMA_EMBEDDING_MODEL` | Embedding model name |
 
 <details>
-<summary>Reference: layout under <code>src/main/resources/</code></summary>
+<summary>Reference: layout (SRP-style)</summary>
 
-- **`application.yml`** — shared: app name, default profile `dev`, server port, context path `/ai-chat`
-- **`application-dev.yml`** — full Mongo + Ollama for localhost
-- **`application-onsite.yml`** — same keys; values from `${...}` placeholders
-- **`application-prod.yml`** — same; Swagger off; WARN root logging
+- **`application.yml`** — wires `spring.*`, `server.*`, `springdoc.*`, `logging.*` from **`${conf.*}`**; bottom section **`conf:`** holds defaults; **`spring.profiles.active: @activatedProperties@`** (Maven-filtered); banner `classpath:banner/banner.txt`
+- **`application-dev.yml`** / **`application-onsite.yml`** / **`application-prod.yml`** — override **`conf:`** (and thus all derived settings) per environment
+- **`pom.xml`** — `activatedProperties` + Maven **resource filtering** (delimiter **`@` only**, so `${conf...}` is not mangled)
+
+This app does **not** include SRP-only pieces (Keycloak, JPA, SQL Server, mail, NPA, etc.); only the **configuration pattern** is mirrored.
 
 </details>
 
@@ -234,7 +233,7 @@ public VectorStore vectorStore(MongoTemplate mongoTemplate, EmbeddingModel embed
 | Item | Action |
 |------|--------|
 | `pom.xml` | BOM + `spring-ai-starter-model-ollama`; optional OpenAI starter later |
-| `application.yml` | Server port + context path; Mongo; `spring.ai.ollama`; profiles later |
+| `application.yml` + `application-*.yml` | `conf:` + `${conf.*}`; Maven `@activatedProperties@`; per-profile `conf` overrides |
 | New | `KnowledgeDocument` + repository (**Phase 3**); later: `LocalMongoVectorStore`, `RagChatService` |
 | Refactor | `ChatController` → new service; remove `RestTemplate` from domain |
 | Seed | `AiChatApplication` / runner → `vectorStore.add` |

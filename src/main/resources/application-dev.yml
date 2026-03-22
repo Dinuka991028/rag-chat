@@ -1,27 +1,22 @@
-# Local development — MongoDB + Ollama on localhost
+#################################### Profile: dev - local development ##################################################
+# Base defaults in application.yml are already localhost; use this file for explicit dev-only overrides.
 
-spring:
-  data:
-    mongodb:
-      host: localhost
-      port: 27017
-      database: ai
-  ai:
-    ollama:
-      base-url: http://localhost:11434
-      chat:
-        options:
-          model: llama3
-      embedding:
-        options:
-          model: llama3
-
-logging:
-  level:
-    ai_chat: DEBUG
-
-springdoc:
-  api-docs:
-    enabled: true
-  swagger-ui:
-    enabled: true
+conf:
+  application:
+    name: ai-chat-DEV
+  mongodb:
+    host: localhost
+    port: 27017
+    database: ai
+  ollama:
+    base-url: http://localhost:11434
+    chat-model: llama3
+    embedding-model: llama3
+  springdoc:
+    api-docs-enabled: true
+    swagger-ui-enabled: true
+  logging:
+    level:
+      root: INFO
+      ai-chat: DEBUG
+      org-springframework-web: INFO

@@ -1,29 +1,20 @@
-# Production — configure via environment variables (no secrets in this file)
+#################################### Profile: production ###############################################################
+# Set MONGO_HOST, OLLAMA_BASE_URL, etc. in the environment; Swagger is off by default.
 
-spring:
-  data:
-    mongodb:
-      host: ${MONGO_HOST:localhost}
-      port: ${MONGO_PORT:27017}
-      database: ${MONGO_DATABASE:ai}
-  ai:
-    ollama:
-      base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
-      chat:
-        options:
-          model: ${OLLAMA_CHAT_MODEL:llama3}
-      embedding:
-        options:
-          model: ${OLLAMA_EMBEDDING_MODEL:llama3}
-
-logging:
-  level:
-    root: WARN
-    ai_chat: INFO
-    org.springframework.web: WARN
-
-springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false
+conf:
+  mongodb:
+    host: ${MONGO_HOST:localhost}
+    port: ${MONGO_PORT:27017}
+    database: ${MONGO_DATABASE:ai}
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://127.0.0.1:11434}
+    chat-model: ${OLLAMA_CHAT_MODEL:llama3}
+    embedding-model: ${OLLAMA_EMBEDDING_MODEL:llama3}
+  springdoc:
+    api-docs-enabled: false
+    swagger-ui-enabled: false
+  logging:
+    level:
+      root: WARN
+      ai-chat: INFO
+      org-springframework-web: WARN
