@@ -21,8 +21,12 @@ import java.util.List;
 @Service
 public class LlmChatService implements ChatService {
 
-    private static final double RAG_SIMILARITY_THRESHOLD = 0.1;
-    private static final int RAG_TOP_K = 1;
+    /**
+     * SRS is chunked into many segments; retrieving only one often misses the answer. Use several top matches.
+     * Threshold 0 = rank by similarity but do not drop results below an arbitrary cosine floor (see {@link SearchRequest#SIMILARITY_THRESHOLD_ACCEPT_ALL}).
+     */
+    private static final double RAG_SIMILARITY_THRESHOLD = SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL;
+    private static final int RAG_TOP_K = 8;
 
     private static final String SYSTEM_PLAIN =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
@@ -31,9 +35,9 @@ public class LlmChatService implements ChatService {
 
     private static final String SYSTEM_RAG =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain.\n"
-                    + "Answer ONLY using the knowledge base excerpts in the user message.\n"
+                    + "Answer ONLY using the knowledge base excerpts in the user message (they may be partial; combine information across excerpts when needed).\n"
                     + "Do NOT use external knowledge.\n"
-                    + "If the answer is not clearly available in those excerpts, say exactly: "
+                    + "If the excerpts do not contain enough information to answer, say exactly: "
                     + "Sorry, I don't have enough information to answer that right now.";
 
     @Autowired
