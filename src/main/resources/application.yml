@@ -127,4 +127,10 @@ conf:
       root: INFO
       ai-chat: DEBUG
       org-springframework-web: INFO
+  # RAG KB is SRS-only: chunks come from this PDF at startup when kb_documents is empty.
+  kb:
+    srs-pdf-enabled: true
+    srs-pdf-classpath: classpath:kb/ssrp-srs.pdf
+    srs-chunk-max-chars: 1200
+    srs-chunk-overlap: 120
 #################################### / conf ############################################################################
