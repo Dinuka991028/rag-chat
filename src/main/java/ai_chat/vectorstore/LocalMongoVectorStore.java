@@ -22,6 +22,8 @@ public class LocalMongoVectorStore implements VectorStore {
 
     private static final String META_CATEGORY = "category";
     private static final String META_SOURCE = "source";
+    private static final String META_CHUNK_INDEX = "chunkIndex";
+    private static final String META_SECTION_HEADING = "sectionHeading";
 
     private final EmbeddingModel embeddingModel;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
@@ -50,6 +52,23 @@ public class LocalMongoVectorStore implements VectorStore {
                 }
                 if (s != null) {
                     entity.setSource(String.valueOf(s));
+                }
+                Object chunkIdx = meta.get(META_CHUNK_INDEX);
+                if (chunkIdx instanceof Number) {
+                    entity.setChunkIndex(((Number) chunkIdx).intValue());
+                } else if (chunkIdx != null) {
+                    try {
+                        entity.setChunkIndex(Integer.parseInt(String.valueOf(chunkIdx)));
+                    } catch (NumberFormatException ignored) {
+                        // leave null
+                    }
+                }
+                Object heading = meta.get(META_SECTION_HEADING);
+                if (heading != null) {
+                    String h = String.valueOf(heading).trim();
+                    if (!h.isEmpty()) {
+                        entity.setSectionHeading(h);
+                    }
                 }
             }
             float[] vector = embeddingModel.embed(doc.getText());
@@ -126,6 +145,12 @@ public class LocalMongoVectorStore implements VectorStore {
         }
         if (kd.getSource() != null) {
             meta.put(META_SOURCE, kd.getSource());
+        }
+        if (kd.getChunkIndex() != null) {
+            meta.put(META_CHUNK_INDEX, kd.getChunkIndex());
+        }
+        if (kd.getSectionHeading() != null) {
+            meta.put(META_SECTION_HEADING, kd.getSectionHeading());
         }
         return new Document(kd.getId(), kd.getContent(), meta);
     }

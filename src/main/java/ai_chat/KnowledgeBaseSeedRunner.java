@@ -1,7 +1,8 @@
 package ai_chat;
 
 import ai_chat.kb.PdfTextExtractor;
-import ai_chat.kb.TextChunker;
+import ai_chat.kb.SrsChunker;
+import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,10 +45,10 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
     @Value("${conf.kb.srs-pdf-classpath:classpath:kb/ssrp-srs.pdf}")
     private String srsPdfClasspath;
 
-    @Value("${conf.kb.srs-chunk-max-chars:1200}")
+    @Value("${conf.kb.srs-chunk-max-chars:900}")
     private int srsChunkMaxChars;
 
-    @Value("${conf.kb.srs-chunk-overlap:120}")
+    @Value("${conf.kb.srs-chunk-overlap:200}")
     private int srsChunkOverlap;
 
     @Override
@@ -79,22 +80,28 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
             return List.of();
         }
         try (InputStream in = resource.getInputStream()) {
-            String text = PdfTextExtractor.extractText(in);
-            List<String> chunks = TextChunker.chunk(text, srsChunkMaxChars, srsChunkOverlap);
+            String raw = PdfTextExtractor.extractText(in);
+            String cleaned = SrsTextPreprocessor.cleanForChunking(raw);
+            List<SrsChunker.SrsIndexedChunk> chunks =
+                    SrsChunker.chunk(cleaned, srsChunkMaxChars, srsChunkOverlap);
             if (chunks.isEmpty()) {
                 log.warn("SRS PDF at {} produced no text (empty or scanned image PDF?).", srsPdfClasspath);
                 return List.of();
             }
             List<Document> docs = new ArrayList<>(chunks.size());
-            for (int i = 0; i < chunks.size(); i++) {
-                docs.add(Document.builder()
-                        .text(chunks.get(i))
+            for (SrsChunker.SrsIndexedChunk ch : chunks) {
+                var b = Document.builder()
+                        .text(ch.textForEmbedding())
                         .metadata("category", "SRS")
                         .metadata("source", "ssrp-srs-pdf")
-                        .metadata("chunk", String.valueOf(i))
-                        .build());
+                        .metadata("chunkIndex", ch.chunkIndex());
+                if (ch.sectionHeading() != null && !ch.sectionHeading().isBlank()) {
+                    b.metadata("sectionHeading", ch.sectionHeading());
+                }
+                docs.add(b.build());
             }
-            log.info("Indexed SRS PDF: {} chunk(s) from {}", chunks.size(), srsPdfClasspath);
+            log.info("Indexed SRS PDF: {} chunk(s) from {} (after cleanup + section-aware chunking)", chunks.size(),
+                    srsPdfClasspath);
             return docs;
         } catch (IOException e) {
             log.warn("Could not read SRS PDF at {}: {}", srsPdfClasspath, e.getMessage());

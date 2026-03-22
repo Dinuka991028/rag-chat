@@ -30,6 +30,12 @@ public class KnowledgeDocument {
 
     private String source;
 
+    /** Order within the SRS ingest; optional, for debugging. */
+    private Integer chunkIndex;
+
+    /** Best-effort section title from the SRS (e.g. 2.2.1 Portal Login). */
+    private String sectionHeading;
+
     /** Embedding vector; set when rows are ingested via {@link ai_chat.vectorstore.LocalMongoVectorStore#add}. */
     private List<Float> embedding;
 }

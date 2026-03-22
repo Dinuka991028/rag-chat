@@ -131,6 +131,7 @@ conf:
   kb:
     srs-pdf-enabled: true
     srs-pdf-classpath: classpath:kb/ssrp-srs.pdf
-    srs-chunk-max-chars: 1200
-    srs-chunk-overlap: 120
+    # Smaller, paragraph-based chunks + section headers in text improve retrieval vs long blind windows.
+    srs-chunk-max-chars: 900
+    srs-chunk-overlap: 200
 #################################### / conf ############################################################################
