@@ -144,4 +144,12 @@ conf:
     # Smaller, paragraph-based chunks + section headers in text improve retrieval vs long blind windows.
     srs-chunk-max-chars: 900
     srs-chunk-overlap: 200
+  # Unknown query training pipeline (manual approval by default).
+  unknown-training:
+    enabled: true
+    cron: "0 0 * * * *" # every hour
+    batch-size: 50
+    min-frequency: 2
+    auto-approve: false # false = semi-auto with human approval
+    delete-processed-unknowns: false
 #################################### / conf ############################################################################
