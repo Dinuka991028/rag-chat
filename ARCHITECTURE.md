@@ -41,7 +41,7 @@ HTTP (JSON/text)
     → ChatController
         → ChatService (interface)
             → LlmChatService
-                → ChatModel (Spring AI — provider from config) + VectorStore (LocalMongoVectorStore)
+                → ChatModel (Spring AI — provider from config) + HybridRetrievalService
                 → PromptBuilderService (builds structured RAG payload blocks)
                 → ConversationHistoryService (in-memory sessions for `/chat/conversation` and `/chat/rag/conversation`)
                 → MongoTemplate / KnowledgeDocumentRepository → MongoDB
@@ -51,7 +51,8 @@ Supporting pieces:
 
 - **`KnowledgeBaseSeedRunner`** — **`@Order(1)`**, **`@Profile("!test")`**; if the KB is empty, seeds Spring AI **`Document`** chunks and calls **`vectorStore.add(...)`**, which persists **`KnowledgeDocument`** rows **with embeddings** (via **`EmbeddingModel`** inside **`LocalMongoVectorStore`**).
 
-**`LocalMongoVectorStore`** implements **`VectorStore`** (`add` + `similaritySearch`): cosine search over stored embeddings. RAG uses **`vectorStore.similaritySearch(SearchRequest)`** from **`LlmChatService`**.
+**`LocalMongoVectorStore`** implements **`VectorStore`** (`add` + `similaritySearch`): cosine search over stored embeddings.
+RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector and keyword-ranked results (configurable).
 
 ---
 
@@ -65,7 +66,8 @@ Supporting pieces:
 | `repository.KnowledgeDocumentRepository` | `MongoRepository` for KB CRUD |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
 | `service.ChatService` | Contract: plain + RAG; plus conversation variants returning **`ChatConversationResponse`** |
-| `service.impl.LlmChatService` | **`ChatModel`** + RAG via **`VectorStore`**; merges short-term history into prompts and retrieval query |
+| `service.impl.LlmChatService` | **`ChatModel`** + RAG orchestration; merges short-term history into prompts and retrieval query |
+| `service.HybridRetrievalService` | Hybrid retrieval starter: vector search + keyword ranking + reciprocal-rank fusion |
 | `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[QUESTION]`, `[INSTRUCTIONS]` and source labels |
 | `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
 | `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
@@ -105,7 +107,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
-3. **Similarity search** — **`VectorStore.similaritySearch(SearchRequest)`** scores stored embeddings with **cosine similarity** (threshold and fetch pool configured in **`LlmChatService`**), returns Spring AI **`Document`** results; curated FAQ chunks are merged with SRS chunks up to a configured cap.
+3. **Hybrid retrieval** — **`HybridRetrievalService`** gets vector results from **`VectorStore.similaritySearch(SearchRequest)`**, adds MongoDB **`$text`** keyword-ranked candidates (text-score order on indexed KB fields), fuses rankings, then returns Spring AI **`Document`** results; curated FAQ chunks are merged with SRS chunks up to a configured cap.
 
 4. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
 
@@ -140,6 +142,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 `src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
 - **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits, **`conf.chat.history-max-messages`** and **`conf.chat.history-session-ttl-hours`** for conversation endpoints.
+- **Hybrid retrieval tuning** — **`conf.rag.hybrid.enabled`**, **`conf.rag.hybrid.keyword-top-k`**, **`conf.rag.hybrid.vector-weight`**, **`conf.rag.hybrid.keyword-weight`** control vector+keyword fusion behavior.
 - **Embedding consistency controls** — **`conf.kb.embedding-metadata.model-tag`** + **`conf.kb.embedding-metadata.version`** are stamped on new KB chunks; **`conf.kb.embedding-compatibility.strict`** controls whether mismatches are warn-only (`false`) or excluded from retrieval (`true`).
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).

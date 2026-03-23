@@ -135,6 +135,13 @@ conf:
   chat:
     history-max-messages: 20
     history-session-ttl-hours: 24
+  rag:
+    hybrid:
+      enabled: true
+      keyword-top-k: 20
+      # Reciprocal-rank fusion weights; tune per domain.
+      vector-weight: 1.0
+      keyword-weight: 0.8
   # RAG KB: curated FAQ snippets (code) + SRS. Prefer kb/ssrp-srs-llm.md (LLM-friendly) over PDF when present.
   kb:
     srs-pdf-enabled: true

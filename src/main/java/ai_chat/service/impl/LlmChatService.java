@@ -6,6 +6,7 @@ import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.repository.UnknownQueryRepository;
 import ai_chat.service.ChatService;
 import ai_chat.service.ConversationHistoryService;
+import ai_chat.service.HybridRetrievalService;
 import ai_chat.service.PromptBuilderService;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -15,7 +16,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -63,9 +63,6 @@ public class LlmChatService implements ChatService {
     private UnknownQueryRepository unknownQueryRepository;
 
     @Autowired
-    private VectorStore vectorStore;
-
-    @Autowired
     private KnowledgeDocumentRepository knowledgeDocumentRepository;
 
     @Autowired
@@ -73,6 +70,9 @@ public class LlmChatService implements ChatService {
 
     @Autowired
     private PromptBuilderService promptBuilderService;
+
+    @Autowired
+    private HybridRetrievalService hybridRetrievalService;
 
     @Override
     public String askAI(String prompt) {
@@ -152,13 +152,7 @@ public class LlmChatService implements ChatService {
     }
 
     private List<Document> retrieveMerged(String retrievalQuery) {
-        List<Document> raw =
-                vectorStore.similaritySearch(
-                        SearchRequest.builder()
-                                .query(retrievalQuery)
-                                .topK(RAG_FETCH_POOL)
-                                .similarityThreshold(RAG_SIMILARITY_THRESHOLD)
-                                .build());
+        List<Document> raw = hybridRetrievalService.retrieve(retrievalQuery, RAG_FETCH_POOL, RAG_SIMILARITY_THRESHOLD);
         return mergeCuratedWithSrs(raw, RAG_CURATED_CAP, RAG_TOP_K);
     }
 

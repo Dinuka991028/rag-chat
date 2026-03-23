@@ -52,10 +52,19 @@ It is intentionally separate from `ARCHITECTURE.md` (which describes current sta
 
 ### 6) Missing Hybrid Search
 
-- **Current state:** only vector retrieval is used.
-- **Risk:** exact keyword/identifier recall can be poor.
-- **Priority:** **P1**.
-- **Action:** combine vector + keyword (`$text`/BM25-style) and fuse scores.
+- **Status:** **DONE (Phase 2 added)**.
+- **Delivered in code:**
+  - Added `HybridRetrievalService` as a separate retrieval layer.
+  - Combines vector results + keyword-ranked results.
+  - Uses reciprocal-rank fusion to produce a unified ranking.
+  - Wired into `LlmChatService` retrieval path.
+  - Phase 2: keyword side now uses MongoDB `$text` search with text-score ordering and an ensured text index on KB fields.
+- **Config added:**
+  - `conf.rag.hybrid.enabled`
+  - `conf.rag.hybrid.keyword-top-k`
+  - `conf.rag.hybrid.vector-weight`
+  - `conf.rag.hybrid.keyword-weight`
+- **Note:** keyword retrieval now uses Mongo text index; external BM25/vector DB can still be added later for larger-scale workloads.
 
 ### 7) Embedding Consistency Metadata
 
