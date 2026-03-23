@@ -20,11 +20,15 @@ It is intentionally separate from `ARCHITECTURE.md` (which describes current sta
 
 ### 2) Missing Re-ranking Layer
 
-- **Current state:** top results from vector search are sent directly to generation.
-- **Risk:** embedding similarity is not always answer relevance.
-- **Priority:** **P0**.
-- **Action:** retrieve top 20 -> rerank -> pass top 5 to prompt.
-- **Candidates:** `bge-reranker` or LLM-based scorer.
+- **Status:** **DONE (LLM-based reranker starter)**.
+- **Delivered in code:**
+  - Added separate `RerankingService`.
+  - RAG flow now does: retrieve (hybrid) -> rerank -> merge curated/SRS -> generate.
+  - Reranker uses strict score format (`ID<TAB>SCORE`) and safe fallback to original ranking on parsing/model errors.
+- **Config added:**
+  - `conf.rag.rerank.enabled`
+  - `conf.rag.rerank.top-k`
+- **Next optional upgrade:** replace LLM scorer with cross-encoder reranker (`bge-reranker`) for lower latency/cost at scale.
 
 ### 3) Prompt Design Hardening
 

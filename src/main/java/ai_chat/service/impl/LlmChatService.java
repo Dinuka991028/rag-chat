@@ -8,6 +8,7 @@ import ai_chat.service.ChatService;
 import ai_chat.service.ConversationHistoryService;
 import ai_chat.service.HybridRetrievalService;
 import ai_chat.service.PromptBuilderService;
+import ai_chat.service.RerankingService;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -73,6 +74,9 @@ public class LlmChatService implements ChatService {
 
     @Autowired
     private HybridRetrievalService hybridRetrievalService;
+
+    @Autowired
+    private RerankingService rerankingService;
 
     @Override
     public String askAI(String prompt) {
@@ -153,7 +157,8 @@ public class LlmChatService implements ChatService {
 
     private List<Document> retrieveMerged(String retrievalQuery) {
         List<Document> raw = hybridRetrievalService.retrieve(retrievalQuery, RAG_FETCH_POOL, RAG_SIMILARITY_THRESHOLD);
-        return mergeCuratedWithSrs(raw, RAG_CURATED_CAP, RAG_TOP_K);
+        List<Document> reranked = rerankingService.rerank(retrievalQuery, raw);
+        return mergeCuratedWithSrs(reranked, RAG_CURATED_CAP, RAG_TOP_K);
     }
 
     private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent) {

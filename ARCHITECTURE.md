@@ -42,6 +42,7 @@ HTTP (JSON/text)
         → ChatService (interface)
             → LlmChatService
                 → ChatModel (Spring AI — provider from config) + HybridRetrievalService
+                → RerankingService (LLM-based candidate reranker)
                 → PromptBuilderService (builds structured RAG payload blocks)
                 → ConversationHistoryService (in-memory sessions for `/chat/conversation` and `/chat/rag/conversation`)
                 → MongoTemplate / KnowledgeDocumentRepository → MongoDB
@@ -68,6 +69,7 @@ RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector 
 | `service.ChatService` | Contract: plain + RAG; plus conversation variants returning **`ChatConversationResponse`** |
 | `service.impl.LlmChatService` | **`ChatModel`** + RAG orchestration; merges short-term history into prompts and retrieval query |
 | `service.HybridRetrievalService` | Hybrid retrieval starter: vector search + keyword ranking + reciprocal-rank fusion |
+| `service.RerankingService` | LLM-based reranking layer that scores retrieval candidates and keeps top-k |
 | `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[QUESTION]`, `[INSTRUCTIONS]` and source labels |
 | `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
 | `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
@@ -107,17 +109,19 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
-3. **Hybrid retrieval** — **`HybridRetrievalService`** gets vector results from **`VectorStore.similaritySearch(SearchRequest)`**, adds MongoDB **`$text`** keyword-ranked candidates (text-score order on indexed KB fields), fuses rankings, then returns Spring AI **`Document`** results; curated FAQ chunks are merged with SRS chunks up to a configured cap.
+3. **Hybrid retrieval** — **`HybridRetrievalService`** gets vector results from **`VectorStore.similaritySearch(SearchRequest)`**, adds MongoDB **`$text`** keyword-ranked candidates (text-score order on indexed KB fields), and fuses rankings.
 
-4. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
+4. **Reranking** — **`RerankingService`** scores the retrieved candidate set against the user query and keeps top-k passages before final prompt composition.
+
+5. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
 
    - A record may be inserted into collection **`unknown_queries`** (**`question`**, **`createdAt`**, optional **`conversationId`** when the request used a conversation endpoint).
    - The user gets a fixed “not enough information” style message.
    - If enabled, **`UnknownQueryTrainingService`** periodically groups repeated unknown questions, generates a draft answer from KB excerpts, and stores it in **`kb_training_drafts`** for admin approval/import.
 
-5. **Grounded generation** — Retrieved excerpts are formatted by **`PromptBuilderService`** into a structured **`UserMessage`** with `[CONTEXT]`, `[QUESTION]`, and `[INSTRUCTIONS]`; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
+6. **Grounded generation** — Retrieved excerpts are formatted by **`PromptBuilderService`** into a structured **`UserMessage`** with `[CONTEXT]`, `[QUESTION]`, and `[INSTRUCTIONS]`; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
 
-6. **Non-RAG chat** — `POST .../chat` skips retrieval and uses a shorter **SSRP assistant** system prompt only.
+7. **Non-RAG chat** — `POST .../chat` skips retrieval and uses a shorter **SSRP assistant** system prompt only.
 
 ---
 
@@ -143,6 +147,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 - **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits, **`conf.chat.history-max-messages`** and **`conf.chat.history-session-ttl-hours`** for conversation endpoints.
 - **Hybrid retrieval tuning** — **`conf.rag.hybrid.enabled`**, **`conf.rag.hybrid.keyword-top-k`**, **`conf.rag.hybrid.vector-weight`**, **`conf.rag.hybrid.keyword-weight`** control vector+keyword fusion behavior.
+- **Reranking tuning** — **`conf.rag.rerank.enabled`** and **`conf.rag.rerank.top-k`** control LLM-based candidate reranking.
 - **Embedding consistency controls** — **`conf.kb.embedding-metadata.model-tag`** + **`conf.kb.embedding-metadata.version`** are stamped on new KB chunks; **`conf.kb.embedding-compatibility.strict`** controls whether mismatches are warn-only (`false`) or excluded from retrieval (`true`).
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
