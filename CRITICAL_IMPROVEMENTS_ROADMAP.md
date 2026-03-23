@@ -59,10 +59,17 @@ It is intentionally separate from `ARCHITECTURE.md` (which describes current sta
 
 ### 7) Embedding Consistency Metadata
 
-- **Current state:** docs warn about re-seeding on embedding change, but chunk-level model/version metadata is not stored in `KnowledgeDocument`.
-- **Risk:** silent mixed embedding spaces.
-- **Priority:** **P0**.
-- **Action:** store `embeddingModel` and `embeddingVersion` per chunk and validate at query time.
+- **Status:** **DONE** (backward-compatible rollout).
+- **Delivered in code:**
+  - `KnowledgeDocument` now stores `embeddingModel` and `embeddingVersion`.
+  - `LocalMongoVectorStore.add(...)` stamps both fields on new chunks.
+  - Retrieval checks doc metadata against active embedding identity.
+  - Compatibility mode is configurable:
+    - `conf.kb.embedding-compatibility.strict=false` -> warn only (allow docs)
+    - `conf.kb.embedding-compatibility.strict=true` -> skip mismatched docs
+- **Config added:**
+  - `conf.kb.embedding-metadata.model-tag`
+  - `conf.kb.embedding-metadata.version`
 
 ### 8) Streaming Responses
 

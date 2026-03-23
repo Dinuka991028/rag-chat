@@ -8,6 +8,8 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.lang.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,19 +21,31 @@ import java.util.Map;
  * Uses cosine similarity in-process (no Atlas Vector Search).
  */
 public class LocalMongoVectorStore implements VectorStore {
+    private static final Logger log = LoggerFactory.getLogger(LocalMongoVectorStore.class);
 
     private static final String META_CATEGORY = "category";
     private static final String META_SOURCE = "source";
     private static final String META_CHUNK_INDEX = "chunkIndex";
     private static final String META_SECTION_HEADING = "sectionHeading";
+    private static final String META_EMBEDDING_MODEL = "embeddingModel";
+    private static final String META_EMBEDDING_VERSION = "embeddingVersion";
 
     private final EmbeddingModel embeddingModel;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
+    private final String activeEmbeddingModelTag;
+    private final String activeEmbeddingVersion;
+    private final boolean strictEmbeddingCompatibility;
 
     public LocalMongoVectorStore(EmbeddingModel embeddingModel,
-                                 KnowledgeDocumentRepository knowledgeDocumentRepository) {
+                                 KnowledgeDocumentRepository knowledgeDocumentRepository,
+                                 String activeEmbeddingModelTag,
+                                 String activeEmbeddingVersion,
+                                 boolean strictEmbeddingCompatibility) {
         this.embeddingModel = embeddingModel;
         this.knowledgeDocumentRepository = knowledgeDocumentRepository;
+        this.activeEmbeddingModelTag = normalize(activeEmbeddingModelTag);
+        this.activeEmbeddingVersion = normalize(activeEmbeddingVersion);
+        this.strictEmbeddingCompatibility = strictEmbeddingCompatibility;
     }
 
     @Override
@@ -73,6 +87,8 @@ public class LocalMongoVectorStore implements VectorStore {
             }
             float[] vector = embeddingModel.embed(doc.getText());
             entity.setEmbedding(toFloatList(vector));
+            entity.setEmbeddingModel(activeEmbeddingModelTag);
+            entity.setEmbeddingVersion(activeEmbeddingVersion);
             knowledgeDocumentRepository.save(entity);
         }
     }
@@ -95,6 +111,9 @@ public class LocalMongoVectorStore implements VectorStore {
         List<KnowledgeDocument> all = knowledgeDocumentRepository.findAll();
         List<Scored> scored = new ArrayList<>();
         for (KnowledgeDocument kd : all) {
+            if (!isEmbeddingCompatible(kd)) {
+                continue;
+            }
             List<Float> emb = kd.getEmbedding();
             if (emb == null || emb.isEmpty()) {
                 continue;
@@ -152,7 +171,46 @@ public class LocalMongoVectorStore implements VectorStore {
         if (kd.getSectionHeading() != null) {
             meta.put(META_SECTION_HEADING, kd.getSectionHeading());
         }
+        if (kd.getEmbeddingModel() != null) {
+            meta.put(META_EMBEDDING_MODEL, kd.getEmbeddingModel());
+        }
+        if (kd.getEmbeddingVersion() != null) {
+            meta.put(META_EMBEDDING_VERSION, kd.getEmbeddingVersion());
+        }
         return new Document(kd.getId(), kd.getContent(), meta);
+    }
+
+    private boolean isEmbeddingCompatible(KnowledgeDocument kd) {
+        String docModel = normalize(kd.getEmbeddingModel());
+        String docVersion = normalize(kd.getEmbeddingVersion());
+
+        boolean modelMismatch = !docModel.isEmpty() && !activeEmbeddingModelTag.isEmpty() && !docModel.equals(activeEmbeddingModelTag);
+        boolean versionMismatch = !docVersion.isEmpty() && !activeEmbeddingVersion.isEmpty() && !docVersion.equals(activeEmbeddingVersion);
+        boolean mismatch = modelMismatch || versionMismatch;
+        if (!mismatch) {
+            return true;
+        }
+
+        if (strictEmbeddingCompatibility) {
+            log.warn(
+                    "Skipping incompatible embedding doc id={} (doc model/version={}/{}, active={}/{})",
+                    kd.getId(), safe(docModel), safe(docVersion), safe(activeEmbeddingModelTag), safe(activeEmbeddingVersion));
+            return false;
+        }
+
+        log.warn(
+                "Embedding metadata mismatch for doc id={} (doc model/version={}/{}, active={}/{}). "
+                        + "Allowed because strict mode is disabled.",
+                kd.getId(), safe(docModel), safe(docVersion), safe(activeEmbeddingModelTag), safe(activeEmbeddingVersion));
+        return true;
+    }
+
+    private static String normalize(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private static String safe(String s) {
+        return s == null || s.isBlank() ? "-" : s;
     }
 
     private static double cosineSimilarity(List<Float> v1, List<Float> v2) {

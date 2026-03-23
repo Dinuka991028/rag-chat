@@ -4,6 +4,7 @@ import ai_chat.dto.AddKnowledgeRequest;
 import ai_chat.kb.PdfTextExtractor;
 import ai_chat.kb.SrsChunker;
 import ai_chat.kb.SrsTextPreprocessor;
+import ai_chat.repository.KbTrainingDraftRepository;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.repository.UnknownQueryRepository;
 import org.springframework.ai.document.Document;
@@ -17,7 +18,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class KnowledgeAdminService {
@@ -25,6 +28,7 @@ public class KnowledgeAdminService {
     private final VectorStore vectorStore;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
     private final UnknownQueryRepository unknownQueryRepository;
+    private final KbTrainingDraftRepository kbTrainingDraftRepository;
 
     @Value("${conf.kb.srs-chunk-max-chars:900}")
     private int srsChunkMaxChars;
@@ -35,10 +39,12 @@ public class KnowledgeAdminService {
     public KnowledgeAdminService(
             VectorStore vectorStore,
             KnowledgeDocumentRepository knowledgeDocumentRepository,
-            UnknownQueryRepository unknownQueryRepository) {
+            UnknownQueryRepository unknownQueryRepository,
+            KbTrainingDraftRepository kbTrainingDraftRepository) {
         this.vectorStore = vectorStore;
         this.knowledgeDocumentRepository = knowledgeDocumentRepository;
         this.unknownQueryRepository = unknownQueryRepository;
+        this.kbTrainingDraftRepository = kbTrainingDraftRepository;
     }
 
     /** One KB article; optional title is prepended so embeddings match customer phrasing better. */
@@ -104,5 +110,27 @@ public class KnowledgeAdminService {
 
     public void deleteUnknownQuery(String id) {
         unknownQueryRepository.deleteById(id);
+    }
+
+    /**
+     * Clears all operational RAG/training data so the system can be re-seeded cleanly.
+     */
+    public Map<String, Long> clearAllOperationalData() {
+        long kbBefore = knowledgeDocumentRepository.count();
+        long unknownBefore = unknownQueryRepository.count();
+        long draftsBefore = kbTrainingDraftRepository.count();
+
+        kbTrainingDraftRepository.deleteAll();
+        unknownQueryRepository.deleteAll();
+        knowledgeDocumentRepository.deleteAll();
+
+        Map<String, Long> out = new LinkedHashMap<>();
+        out.put("deletedKbDocuments", kbBefore);
+        out.put("deletedUnknownQueries", unknownBefore);
+        out.put("deletedTrainingDrafts", draftsBefore);
+        out.put("remainingKbDocuments", knowledgeDocumentRepository.count());
+        out.put("remainingUnknownQueries", unknownQueryRepository.count());
+        out.put("remainingTrainingDrafts", kbTrainingDraftRepository.count());
+        return out;
     }
 }

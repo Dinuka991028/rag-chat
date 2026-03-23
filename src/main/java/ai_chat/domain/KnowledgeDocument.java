@@ -38,4 +38,10 @@ public class KnowledgeDocument {
 
     /** Embedding vector; set when rows are ingested via {@link ai_chat.vectorstore.LocalMongoVectorStore#add}. */
     private List<Float> embedding;
+
+    /** Embedding model tag used to create this vector (for compatibility checks). */
+    private String embeddingModel;
+
+    /** Application-level embedding schema/version (for safe migration controls). */
+    private String embeddingVersion;
 }

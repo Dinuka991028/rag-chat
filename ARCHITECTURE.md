@@ -101,7 +101,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## How RAG works (end-to-end)
 
-1. **Knowledge storage** — Documents live in MongoDB collection **`kb_documents`**, with fields such as `content`, `category`, `source`, and **`embedding`** (list of floats), populated on ingest via **`VectorStore.add`**.
+1. **Knowledge storage** — Documents live in MongoDB collection **`kb_documents`**, with fields such as `content`, `category`, `source`, **`embedding`** (list of floats), plus embedding identity metadata (**`embeddingModel`**, **`embeddingVersion`**) populated on ingest via **`VectorStore.add`**.
 
 2. **Query embedding** — **`LocalMongoVectorStore`** uses **`EmbeddingModel.embed(query)`** for the query vector.
 
@@ -129,7 +129,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Data model (MongoDB)
 
-- **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time).
+- **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time). New rows are tagged with **`embeddingModel`** and **`embeddingVersion`** to guard against mixed embedding spaces.
 - **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr). Documents may include **`conversationId`** for requests from **`/chat/rag/conversation`**.
 - **`kb_training_drafts`** — Admin review queue populated by **`UnknownQueryTrainingService`**. Drafts are created from normalized/grouped entries in `unknown_queries`, then imported into `kb_documents` via admin approval endpoints under **`/admin/unknown-training/drafts/**`.
 
@@ -140,6 +140,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 `src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
 - **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits, **`conf.chat.history-max-messages`** and **`conf.chat.history-session-ttl-hours`** for conversation endpoints.
+- **Embedding consistency controls** — **`conf.kb.embedding-metadata.model-tag`** + **`conf.kb.embedding-metadata.version`** are stamped on new KB chunks; **`conf.kb.embedding-compatibility.strict`** controls whether mismatches are warn-only (`false`) or excluded from retrieval (`true`).
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
 - **`spring.ai.ollama.*`**, **`spring.ai.openai.*`**, **`spring.ai.vertex.ai.gemini.*`** map from **`conf.ollama.*`**, **`conf.openai.*`**, **`conf.vertex.gemini.*`**. **`LlmChatService`** injects **`ChatModel`** only — switching **`conf.ai.chat-provider`** swaps the adapter (Ollama, OpenAI, Vertex Gemini, …) with no code change.
@@ -158,7 +159,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 2. **Embeddings** — **`LocalMongoVectorStore.add`** and similarity search both use **`EmbeddingModel`** (Ollama and/or OpenAI per **`conf.ai.embedding-provider`**).
 
-3. **Model assumptions** — Default **`llama3`** for chat and embeddings when providers are Ollama; OpenAI model names live under **`conf.openai.*`**. Do not mix embedding spaces without re-embedding stored chunks.
+3. **Model assumptions** — Default **`llama3`** for chat and embeddings when providers are Ollama; OpenAI model names live under **`conf.openai.*`**. Embedding identity metadata (`embeddingModel`, `embeddingVersion`) is stored per chunk, and retrieval can enforce compatibility via **`conf.kb.embedding-compatibility.strict`**.
 
 ---
 

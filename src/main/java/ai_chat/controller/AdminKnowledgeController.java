@@ -93,6 +93,22 @@ public class AdminKnowledgeController {
         return ResponseEntity.ok(Map.of("status", "deleted", "id", id));
     }
 
+    @PostMapping("/maintenance/clear-all")
+    @Operation(summary = "Dangerous: clear KB docs + unknown queries + training drafts")
+    public ResponseEntity<Map<String, Object>> clearAllData(
+            @RequestParam(value = "confirm", required = false) String confirm) {
+        if (!"YES".equals(confirm)) {
+            throw new ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "This operation is destructive. Call with confirm=YES.");
+        }
+        Map<String, Long> stats = knowledgeAdminService.clearAllOperationalData();
+        return ResponseEntity.ok(Map.of(
+                "status", "cleared",
+                "confirm", "YES",
+                "details", stats));
+    }
+
     @GetMapping(value = "/unknown-training/drafts")
     @Operation(summary = "List unknown-training drafts by status (newest first)")
     public org.springframework.data.domain.Page<KbTrainingDraft> listDrafts(

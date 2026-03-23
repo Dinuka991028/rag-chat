@@ -144,6 +144,15 @@ conf:
     # Smaller, paragraph-based chunks + section headers in text improve retrieval vs long blind windows.
     srs-chunk-max-chars: 900
     srs-chunk-overlap: 200
+    # Embedding identity metadata stamped on new KB chunks.
+    embedding-metadata:
+      # Set this to the active embedding model identifier you use operationally.
+      # Default falls back to provider tag (ollama/openai/vertexai) for backward-safe rollout.
+      model-tag: ${conf.ai.embedding-provider}
+      version: v1
+    # strict=false: allow mismatched docs (warn only). strict=true: skip mismatched docs in retrieval.
+    embedding-compatibility:
+      strict: true
   # Unknown query training pipeline (manual approval by default).
   unknown-training:
     enabled: true
