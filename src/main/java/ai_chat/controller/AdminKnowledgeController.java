@@ -2,7 +2,9 @@ package ai_chat.controller;
 
 import ai_chat.dto.AddKnowledgeRequest;
 import ai_chat.dto.KnowledgeAddResponse;
+import ai_chat.domain.KbTrainingDraft;
 import ai_chat.domain.UnknownQuery;
+import ai_chat.repository.KbTrainingDraftRepository;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.service.KnowledgeAdminService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,10 +16,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -31,13 +36,16 @@ public class AdminKnowledgeController {
 
     private final KnowledgeAdminService knowledgeAdminService;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
+    private final KbTrainingDraftRepository kbTrainingDraftRepository;
 
     @Autowired
     public AdminKnowledgeController(
             KnowledgeAdminService knowledgeAdminService,
-            KnowledgeDocumentRepository knowledgeDocumentRepository) {
+            KnowledgeDocumentRepository knowledgeDocumentRepository,
+            KbTrainingDraftRepository kbTrainingDraftRepository) {
         this.knowledgeAdminService = knowledgeAdminService;
         this.knowledgeDocumentRepository = knowledgeDocumentRepository;
+        this.kbTrainingDraftRepository = kbTrainingDraftRepository;
     }
 
     @PostMapping(value = "/knowledge", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -75,6 +83,73 @@ public class AdminKnowledgeController {
     public ResponseEntity<Map<String, String>> deleteUnknown(@PathVariable String id) {
         knowledgeAdminService.deleteUnknownQuery(id);
         return ResponseEntity.ok(Map.of("status", "deleted", "id", id));
+    }
+
+    @GetMapping(value = "/unknown-training/drafts")
+    @Operation(summary = "List unknown-training drafts by status (newest first)")
+    public org.springframework.data.domain.Page<KbTrainingDraft> listDrafts(
+            @RequestParam(defaultValue = "PENDING") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        KbTrainingDraft.Status st;
+        try {
+            st = KbTrainingDraft.Status.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Unknown draft status: " + status);
+        }
+        var p = PageRequest.of(Math.max(0, page), Math.min(200, Math.max(1, size)));
+        return kbTrainingDraftRepository.findByStatusOrderByCreatedAtDesc(st, p);
+    }
+
+    @PostMapping(value = "/unknown-training/drafts/{id}/approve")
+    @Operation(summary = "Approve a draft and import it into the KB")
+    public ResponseEntity<Map<String, Object>> approveDraft(@PathVariable String id) {
+        KbTrainingDraft draft = kbTrainingDraftRepository
+                .findById(id)
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Draft not found"));
+
+        if (draft.getStatus() != KbTrainingDraft.Status.PENDING) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Draft is not in PENDING status");
+        }
+        if (draft.getProposedAnswer() == null || draft.getProposedAnswer().isBlank()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Draft has empty proposedAnswer");
+        }
+
+        AddKnowledgeRequest req = new AddKnowledgeRequest();
+        req.setTitle(draft.getQuestion());
+        req.setContent(draft.getProposedAnswer());
+        req.setCategory("UnknownTraining");
+        req.setSource("unknown-training");
+
+        long total = knowledgeAdminService.addTextEntry(req);
+        draft.setStatus(KbTrainingDraft.Status.IMPORTED);
+        draft.setUpdatedAt(new Date());
+        kbTrainingDraftRepository.save(draft);
+
+        return ResponseEntity.ok(Map.of("status", "imported", "id", id, "totalKbDocuments", total));
+    }
+
+    @PostMapping(value = "/unknown-training/drafts/{id}/reject")
+    @Operation(summary = "Reject a draft (it will never be imported)")
+    public ResponseEntity<Map<String, String>> rejectDraft(@PathVariable String id) {
+        KbTrainingDraft draft = kbTrainingDraftRepository
+                .findById(id)
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Draft not found"));
+
+        if (draft.getStatus() != KbTrainingDraft.Status.PENDING) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "Draft is not in PENDING status");
+        }
+        draft.setStatus(KbTrainingDraft.Status.REJECTED);
+        draft.setUpdatedAt(new Date());
+        kbTrainingDraftRepository.save(draft);
+
+        return ResponseEntity.ok(Map.of("status", "rejected", "id", id));
+    }
+
+    @PostMapping(value = "/unknown-training/drafts/{id}/import")
+    @Operation(summary = "Import a draft into the KB (same as approve, kept for convenience)")
+    public ResponseEntity<Map<String, Object>> importDraft(@PathVariable String id) {
+        return approveDraft(id);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
