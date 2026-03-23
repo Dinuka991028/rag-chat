@@ -1,0 +1,108 @@
+# Critical Improvements Roadmap (Proposed)
+
+This document captures proposed upgrades for the current codebase.  
+It is intentionally separate from `ARCHITECTURE.md` (which describes current state).
+
+---
+
+## Review of Suggested Upgrades (Codebase-Verified)
+
+### 1) Vector Search Scalability
+
+- **Current state:** `LocalMongoVectorStore.similaritySearch(...)` loads all KB rows and computes cosine similarity in-process.
+- **Risk:** O(n) scan will degrade as `kb_documents` grows.
+- **Priority:** **P0**.
+- **Recommended options (order):**
+  1. MongoDB Atlas Vector Search
+  2. FAISS (local)
+  3. Qdrant
+- **Action:** Introduce a pluggable retrieval adapter and switch backend by config.
+
+### 2) Missing Re-ranking Layer
+
+- **Current state:** top results from vector search are sent directly to generation.
+- **Risk:** embedding similarity is not always answer relevance.
+- **Priority:** **P0**.
+- **Action:** retrieve top 20 -> rerank -> pass top 5 to prompt.
+- **Candidates:** `bge-reranker` or LLM-based scorer.
+
+### 3) Prompt Design Hardening
+
+- **Status:** **DONE** (implemented via `PromptBuilderService` and wired in `LlmChatService`).
+- **Current state:** structured RAG payload is now used with explicit blocks.
+- **Delivered format:**
+  - `[CONTEXT]`
+  - `[QUESTION]`
+  - `[INSTRUCTIONS]`
+- **Delivered controls:** explicit fallback text for insufficient context, no outside knowledge rule, and source labels from metadata when available.
+
+### 4) Unknown Query Pipeline (Partially Complete)
+
+- **Current state:** unknown queries are logged; grouped processing + draft generation exists; review/import flow exists.
+- **Gap:** grouping is normalization-based, not semantic clustering.
+- **Priority:** **P1**.
+- **Action:** add semantic clustering and confidence thresholding before auto-import.
+
+### 5) Conversation Memory Limitation
+
+- **Current state:** `ConversationHistoryService` keeps history in JVM memory.
+- **Risk:** lost on restart, not shared across replicas.
+- **Priority:** **P0**.
+- **Action:** move to Redis (preferred) or Mongo-backed session store.
+
+### 6) Missing Hybrid Search
+
+- **Current state:** only vector retrieval is used.
+- **Risk:** exact keyword/identifier recall can be poor.
+- **Priority:** **P1**.
+- **Action:** combine vector + keyword (`$text`/BM25-style) and fuse scores.
+
+### 7) Embedding Consistency Metadata
+
+- **Current state:** docs warn about re-seeding on embedding change, but chunk-level model/version metadata is not stored in `KnowledgeDocument`.
+- **Risk:** silent mixed embedding spaces.
+- **Priority:** **P0**.
+- **Action:** store `embeddingModel` and `embeddingVersion` per chunk and validate at query time.
+
+### 8) Streaming Responses
+
+- **Current state:** synchronous full-response endpoints.
+- **Risk:** slower perceived UX.
+- **Priority:** **P2**.
+- **Action:** add SSE/WebFlux streaming endpoints for token streaming.
+
+---
+
+## Prioritized Backlog
+
+### Phase 1 (Immediate / High Impact)
+
+1. Replace O(n) vector scan with indexed vector backend.
+2. Add reranking stage to retrieval pipeline.
+3. Persist and enforce embedding model/version compatibility.
+4. Move conversation memory to Redis.
+
+### Phase 2 (Quality / Reliability)
+
+5. Add hybrid search (vector + keyword).
+6. Harden prompt payload structure and source citation policy.
+7. Upgrade unknown-query grouping to semantic clustering with confidence gates.
+
+### Phase 3 (UX / Architectural Maturity)
+
+8. Add streaming responses.
+9. Introduce orchestrator layer to separate retrieval, reranking, memory, prompt building, and generation.
+
+---
+
+## Target Architecture (Planned)
+
+```
+ChatController
+   -> Orchestrator
+      -> Retrieval Service (Vector DB + Keyword Search)
+      -> Reranker
+      -> Memory Service (Redis/Mongo)
+      -> Prompt Builder
+      -> ChatModel
+```

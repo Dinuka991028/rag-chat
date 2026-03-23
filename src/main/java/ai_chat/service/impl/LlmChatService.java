@@ -6,6 +6,7 @@ import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.repository.UnknownQueryRepository;
 import ai_chat.service.ChatService;
 import ai_chat.service.ConversationHistoryService;
+import ai_chat.service.PromptBuilderService;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -69,6 +70,9 @@ public class LlmChatService implements ChatService {
 
     @Autowired
     private ConversationHistoryService conversationHistoryService;
+
+    @Autowired
+    private PromptBuilderService promptBuilderService;
 
     @Override
     public String askAI(String prompt) {
@@ -159,15 +163,7 @@ public class LlmChatService implements ChatService {
     }
 
     private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent) {
-        StringBuilder context = new StringBuilder();
-        for (Document d : found) {
-            String text = d.getText();
-            if (text != null) {
-                context.append(text).append("\n\n");
-            }
-        }
-        String userPayload =
-                "Knowledge base excerpts:\n\n" + context + "\nCustomer question: " + customerQuestion;
+        String userPayload = promptBuilderService.buildRagPayload(found, customerQuestion);
         try {
             List<Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(SYSTEM_RAG));

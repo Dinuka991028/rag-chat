@@ -42,6 +42,7 @@ HTTP (JSON/text)
         → ChatService (interface)
             → LlmChatService
                 → ChatModel (Spring AI — provider from config) + VectorStore (LocalMongoVectorStore)
+                → PromptBuilderService (builds structured RAG payload blocks)
                 → ConversationHistoryService (in-memory sessions for `/chat/conversation` and `/chat/rag/conversation`)
                 → MongoTemplate / KnowledgeDocumentRepository → MongoDB
 ```
@@ -65,6 +66,7 @@ Supporting pieces:
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
 | `service.ChatService` | Contract: plain + RAG; plus conversation variants returning **`ChatConversationResponse`** |
 | `service.impl.LlmChatService` | **`ChatModel`** + RAG via **`VectorStore`**; merges short-term history into prompts and retrieval query |
+| `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[QUESTION]`, `[INSTRUCTIONS]` and source labels |
 | `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
 | `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
@@ -111,7 +113,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
    - The user gets a fixed “not enough information” style message.
    - If enabled, **`UnknownQueryTrainingService`** periodically groups repeated unknown questions, generates a draft answer from KB excerpts, and stores it in **`kb_training_drafts`** for admin approval/import.
 
-5. **Grounded generation** — Retrieved excerpts are sent in a **`UserMessage`**; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
+5. **Grounded generation** — Retrieved excerpts are formatted by **`PromptBuilderService`** into a structured **`UserMessage`** with `[CONTEXT]`, `[QUESTION]`, and `[INSTRUCTIONS]`; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
 
 6. **Non-RAG chat** — `POST .../chat` skips retrieval and uses a shorter **SSRP assistant** system prompt only.
 
