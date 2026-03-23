@@ -2,6 +2,7 @@ package ai_chat.controller;
 
 import ai_chat.dto.AddKnowledgeRequest;
 import ai_chat.dto.KnowledgeAddResponse;
+import ai_chat.config.UnknownTrainingProperties;
 import ai_chat.domain.KbTrainingDraft;
 import ai_chat.domain.UnknownQuery;
 import ai_chat.repository.KbTrainingDraftRepository;
@@ -19,6 +20,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Date;
@@ -34,18 +37,23 @@ import java.util.Map;
 @Tag(name = "Admin — Knowledge", description = "Feed KB from unknown-question review or PDF imports")
 public class AdminKnowledgeController {
 
+    private static final Logger log = LoggerFactory.getLogger(AdminKnowledgeController.class);
+
     private final KnowledgeAdminService knowledgeAdminService;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
     private final KbTrainingDraftRepository kbTrainingDraftRepository;
+    private final UnknownTrainingProperties unknownTrainingProperties;
 
     @Autowired
     public AdminKnowledgeController(
             KnowledgeAdminService knowledgeAdminService,
             KnowledgeDocumentRepository knowledgeDocumentRepository,
-            KbTrainingDraftRepository kbTrainingDraftRepository) {
+            KbTrainingDraftRepository kbTrainingDraftRepository,
+            UnknownTrainingProperties unknownTrainingProperties) {
         this.knowledgeAdminService = knowledgeAdminService;
         this.knowledgeDocumentRepository = knowledgeDocumentRepository;
         this.kbTrainingDraftRepository = kbTrainingDraftRepository;
+        this.unknownTrainingProperties = unknownTrainingProperties;
     }
 
     @PostMapping(value = "/knowledge", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -101,6 +109,14 @@ public class AdminKnowledgeController {
         return kbTrainingDraftRepository.findByStatusOrderByCreatedAtDesc(st, p);
     }
 
+    @GetMapping(value = "/unknown-training/drafts/pending")
+    @Operation(summary = "List unknown-training drafts with PENDING status (newest first)")
+    public org.springframework.data.domain.Page<KbTrainingDraft> listPendingDrafts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return listDrafts("PENDING", page, size);
+    }
+
     @PostMapping(value = "/unknown-training/drafts/{id}/approve")
     @Operation(summary = "Approve a draft and import it into the KB")
     public ResponseEntity<Map<String, Object>> approveDraft(@PathVariable String id) {
@@ -114,10 +130,16 @@ public class AdminKnowledgeController {
         if (draft.getProposedAnswer() == null || draft.getProposedAnswer().isBlank()) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Draft has empty proposedAnswer");
         }
+        String answer = draft.getProposedAnswer().trim();
+        if (!passesBasicAdminGuards(answer)) {
+            throw new ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Draft answer failed guardrails (too short or generic/empty response)");
+        }
 
         AddKnowledgeRequest req = new AddKnowledgeRequest();
         req.setTitle(draft.getQuestion());
-        req.setContent(draft.getProposedAnswer());
+        req.setContent(answer);
         req.setCategory("UnknownTraining");
         req.setSource("unknown-training");
 
@@ -125,6 +147,13 @@ public class AdminKnowledgeController {
         draft.setStatus(KbTrainingDraft.Status.IMPORTED);
         draft.setUpdatedAt(new Date());
         kbTrainingDraftRepository.save(draft);
+
+        log.info(
+                "Unknown-training draft approved/imported: draftId={}, normalizedQuestion={}, count={}, question={}",
+                id,
+                draft.getNormalizedQuestion(),
+                draft.getCount(),
+                draft.getQuestion());
 
         return ResponseEntity.ok(Map.of("status", "imported", "id", id, "totalKbDocuments", total));
     }
@@ -143,6 +172,13 @@ public class AdminKnowledgeController {
         draft.setUpdatedAt(new Date());
         kbTrainingDraftRepository.save(draft);
 
+        log.info(
+                "Unknown-training draft rejected: draftId={}, normalizedQuestion={}, count={}, question={}",
+                id,
+                draft.getNormalizedQuestion(),
+                draft.getCount(),
+                draft.getQuestion());
+
         return ResponseEntity.ok(Map.of("status", "rejected", "id", id));
     }
 
@@ -150,6 +186,24 @@ public class AdminKnowledgeController {
     @Operation(summary = "Import a draft into the KB (same as approve, kept for convenience)")
     public ResponseEntity<Map<String, Object>> importDraft(@PathVariable String id) {
         return approveDraft(id);
+    }
+
+    private boolean passesBasicAdminGuards(String answer) {
+        if (answer == null) {
+            return false;
+        }
+        String t = answer.trim();
+        if (t.isEmpty() || t.length() < unknownTrainingProperties.getMinAnswerChars()) {
+            return false;
+        }
+        String lower = t.toLowerCase(Locale.ROOT);
+        return !(lower.contains("i don't know")
+                || lower.contains("i do not know")
+                || lower.contains("sorry")
+                || lower.contains("not enough information")
+                || lower.contains("i cannot")
+                || lower.contains("i can't")
+                || lower.contains("empty"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

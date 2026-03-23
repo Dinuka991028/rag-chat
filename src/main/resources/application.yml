@@ -151,5 +151,8 @@ conf:
     batch-size: 50
     min-frequency: 2
     auto-approve: false # false = semi-auto with human approval
+    max-drafts-per-run: 20
+    max-imports-per-run: 20
+    min-answer-chars: 80
     delete-processed-unknowns: false
 #################################### / conf ############################################################################

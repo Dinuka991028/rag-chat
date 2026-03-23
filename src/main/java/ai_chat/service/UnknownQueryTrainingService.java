@@ -24,7 +24,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.Date;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Periodic trainer that turns repeated unknown queries into reviewable KB drafts.
@@ -36,7 +39,11 @@ public class UnknownQueryTrainingService {
     private static final int DRAFT_CONTEXT_TOP_K = 6;
     private static final double DRAFT_CONTEXT_THRESHOLD = SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL;
     private static final Set<KbTrainingDraft.Status> OPEN_DRAFT_STATUSES =
-            Set.of(KbTrainingDraft.Status.PENDING, KbTrainingDraft.Status.APPROVED, KbTrainingDraft.Status.IMPORTED);
+            Set.of(
+                    KbTrainingDraft.Status.PENDING,
+                    KbTrainingDraft.Status.APPROVED,
+                    KbTrainingDraft.Status.REJECTED,
+                    KbTrainingDraft.Status.IMPORTED);
 
     private static final String TRAINING_SYSTEM_PROMPT =
             "You are generating an internal KB draft for support agents.\n"
@@ -84,17 +91,36 @@ public class UnknownQueryTrainingService {
                 UnknownQueryNormalizer.eligibleGroups(batch, properties.getMinFrequency());
         int draftsCreated = 0;
         int imported = 0;
+        int skippedAlreadyTracked = 0;
+        int rejectedByGuards = 0;
+        Set<String> normalizedQuestionsProcessed = new HashSet<>();
+
+        int maxDraftsPerRun = Math.max(0, properties.getMaxDraftsPerRun());
+        int maxImportsPerRun = Math.max(0, properties.getMaxImportsPerRun());
 
         for (UnknownQueryNormalizer.GroupedUnknownQuestion group : groups) {
+            if (!properties.isAutoApprove() && draftsCreated >= maxDraftsPerRun) {
+                break;
+            }
+            if (properties.isAutoApprove() && imported >= maxImportsPerRun) {
+                break;
+            }
+
             boolean alreadyTracked = kbTrainingDraftRepository.existsByNormalizedQuestionAndStatusIn(
                     group.normalizedQuestion(),
                     OPEN_DRAFT_STATUSES);
             if (alreadyTracked) {
+                skippedAlreadyTracked++;
                 continue;
             }
 
             String answer = generateDraftAnswer(group.question());
             if (answer == null) {
+                continue;
+            }
+
+            if (!passesDraftGuardrails(answer)) {
+                rejectedByGuards++;
                 continue;
             }
 
@@ -119,6 +145,7 @@ public class UnknownQueryTrainingService {
                             .build();
                     kbTrainingDraftRepository.save(importedDraft);
                     imported++;
+                    normalizedQuestionsProcessed.add(group.normalizedQuestion());
                 } catch (Exception e) {
                     log.warn("Unknown-training auto-approve import failed for [{}]: {}", group.question(), e.getMessage());
                 }
@@ -135,16 +162,37 @@ public class UnknownQueryTrainingService {
                         .build();
                 kbTrainingDraftRepository.save(draft);
                 draftsCreated++;
+                normalizedQuestionsProcessed.add(group.normalizedQuestion());
             }
         }
 
-        if (properties.isDeleteProcessedUnknowns()) {
-            unknownQueryRepository.deleteAll(batch);
+        int deletedUnknowns = 0;
+        if (properties.isDeleteProcessedUnknowns() && !normalizedQuestionsProcessed.isEmpty()) {
+            // Delete only rows for patterns that actually produced a draft/import,
+            // not the entire batch (which may include low-frequency or dedupe-skipped rows).
+            List<UnknownQuery> toDelete = batch.stream()
+                    .filter(q -> normalizedQuestionsProcessed.contains(UnknownQueryNormalizer.normalizeQuestion(q.getQuestion())))
+                    .collect(Collectors.toList());
+            if (!toDelete.isEmpty()) {
+                unknownQueryRepository.deleteAll(toDelete);
+                deletedUnknowns = toDelete.size();
+            }
         }
 
-        if (draftsCreated > 0 || imported > 0) {
-            log.info("Unknown-training run complete: pendingDraftsCreated={}, imported={}", draftsCreated, imported);
-        }
+        long openPending = kbTrainingDraftRepository.countByStatus(KbTrainingDraft.Status.PENDING);
+        long openImported = kbTrainingDraftRepository.countByStatus(KbTrainingDraft.Status.IMPORTED);
+
+        log.info(
+                "Unknown-training run complete: batchRowsProcessed={}, eligibleGroups={}, pendingDraftsCreated={}, imported={}, skippedAlreadyTracked={}, rejectedByGuards={}, deletedUnknownRows={}, openPendingNow={}, openImportedNow={}",
+                batch.size(),
+                groups.size(),
+                draftsCreated,
+                imported,
+                skippedAlreadyTracked,
+                rejectedByGuards,
+                deletedUnknowns,
+                openPending,
+                openImported);
     }
 
     private String generateDraftAnswer(String question) {
@@ -190,6 +238,41 @@ public class UnknownQueryTrainingService {
             log.warn("Unknown-training draft generation failed for [{}]: {}", question, e.getMessage());
             return null;
         }
+    }
+
+    private boolean passesDraftGuardrails(String answer) {
+        if (answer == null) {
+            return false;
+        }
+        String t = answer.trim();
+        if (t.isEmpty()) {
+            return false;
+        }
+
+        // Basic length/readability gate.
+        if (t.length() < properties.getMinAnswerChars()) {
+            return false;
+        }
+        String[] words = t.split("\\s+");
+        if (words.length < 12) {
+            return false;
+        }
+
+        String lower = t.toLowerCase(Locale.ROOT);
+        // Block generic "can't help" / unsure outputs.
+        if (lower.contains("i don't know")
+                || lower.contains("i do not know")
+                || lower.contains("sorry")
+                || lower.contains("not enough information")
+                || lower.contains("i cannot")
+                || lower.contains("i can't")
+                || lower.contains("empty")) {
+            return false;
+        }
+
+        // Enforce answer brevity (the prompt asks 2-5 sentences).
+        int sentenceCount = t.split("[.!?]+").length;
+        return sentenceCount >= 1 && sentenceCount <= 8;
     }
 
     private static String extractAssistantText(ChatResponse response) {

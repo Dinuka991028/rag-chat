@@ -70,6 +70,10 @@ Supporting pieces:
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
 | `config.VectorStoreConfig` | **`VectorStore`** bean |
 | `config.OpenApiConfig` | OpenAPI metadata for Swagger |
+| `domain.KbTrainingDraft` | Typed Mongo entity for **`kb_training_drafts`** (draft review queue) |
+| `repository.KbTrainingDraftRepository` | `MongoRepository` for draft lifecycle queries |
+| `training.UnknownQueryNormalizer` | Normalization + grouping utility for unknown questions |
+| `service.UnknownQueryTrainingService` | Scheduled pipeline that creates drafts from `unknown_queries` |
 
 ---
 
@@ -105,6 +109,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
    - A record may be inserted into collection **`unknown_queries`** (**`question`**, **`createdAt`**, optional **`conversationId`** when the request used a conversation endpoint).
    - The user gets a fixed “not enough information” style message.
+   - If enabled, **`UnknownQueryTrainingService`** periodically groups repeated unknown questions, generates a draft answer from KB excerpts, and stores it in **`kb_training_drafts`** for admin approval/import.
 
 5. **Grounded generation** — Retrieved excerpts are sent in a **`UserMessage`**; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
 
@@ -124,6 +129,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 - **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time).
 - **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr). Documents may include **`conversationId`** for requests from **`/chat/rag/conversation`**.
+- **`kb_training_drafts`** — Admin review queue populated by **`UnknownQueryTrainingService`**. Drafts are created from normalized/grouped entries in `unknown_queries`, then imported into `kb_documents` via admin approval endpoints under **`/admin/unknown-training/drafts/**`.
 
 ---
 

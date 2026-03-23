@@ -14,4 +14,6 @@ public interface KbTrainingDraftRepository extends MongoRepository<KbTrainingDra
     boolean existsByNormalizedQuestionAndStatusIn(
             String normalizedQuestion,
             Collection<KbTrainingDraft.Status> statuses);
+
+    long countByStatus(KbTrainingDraft.Status status);
 }

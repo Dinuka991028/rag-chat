@@ -15,6 +15,12 @@ public class UnknownTrainingProperties {
     private int batchSize = 50;
     private int minFrequency = 2;
     private boolean autoApprove = false;
+    /** Cap on draft count per scheduled run in semi-auto mode. */
+    private int maxDraftsPerRun = 20;
+    /** Cap on KB imports per scheduled run in full-auto mode. */
+    private int maxImportsPerRun = 20;
+    /** Minimum proposed answer length (characters) to consider for draft creation/import. */
+    private int minAnswerChars = 80;
     private boolean deleteProcessedUnknowns = false;
 
     public boolean isEnabled() {
@@ -55,6 +61,30 @@ public class UnknownTrainingProperties {
 
     public void setAutoApprove(boolean autoApprove) {
         this.autoApprove = autoApprove;
+    }
+
+    public int getMaxDraftsPerRun() {
+        return maxDraftsPerRun;
+    }
+
+    public void setMaxDraftsPerRun(int maxDraftsPerRun) {
+        this.maxDraftsPerRun = maxDraftsPerRun;
+    }
+
+    public int getMaxImportsPerRun() {
+        return maxImportsPerRun;
+    }
+
+    public void setMaxImportsPerRun(int maxImportsPerRun) {
+        this.maxImportsPerRun = maxImportsPerRun;
+    }
+
+    public int getMinAnswerChars() {
+        return minAnswerChars;
+    }
+
+    public void setMinAnswerChars(int minAnswerChars) {
+        this.minAnswerChars = minAnswerChars;
     }
 
     public boolean isDeleteProcessedUnknowns() {
