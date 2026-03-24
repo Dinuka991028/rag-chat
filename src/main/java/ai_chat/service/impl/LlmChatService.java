@@ -9,6 +9,7 @@ import ai_chat.service.ConversationHistoryService;
 import ai_chat.service.HybridRetrievalService;
 import ai_chat.service.PromptBuilderService;
 import ai_chat.service.RerankingService;
+import ai_chat.service.SecurityGovernanceService;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -78,12 +79,19 @@ public class LlmChatService implements ChatService {
     @Autowired
     private RerankingService rerankingService;
 
+    @Autowired
+    private SecurityGovernanceService securityGovernanceService;
+
     @Override
     public String askAI(String prompt) {
+        SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(prompt);
+        if (!decision.allowed()) {
+            return decision.userMessage();
+        }
         try {
             ChatResponse response = chatModel.call(
-                    new Prompt(new SystemMessage(SYSTEM_PLAIN), new UserMessage(prompt)));
-            return extractAssistantText(response);
+                    new Prompt(new SystemMessage(SYSTEM_PLAIN), new UserMessage(decision.safeInput())));
+            return applyOutboundGovernance(decision.safeInput(), extractAssistantText(response));
         } catch (Exception e) {
             System.err.println("Chat model error: " + e.getMessage());
             return "Sorry, the AI service is temporarily unavailable. Please try again later.";
@@ -92,17 +100,23 @@ public class LlmChatService implements ChatService {
 
     @Override
     public String askAIWithContext(String prompt) {
+        SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(prompt);
+        if (!decision.allowed()) {
+            return decision.userMessage();
+        }
+        String safePrompt = decision.safeInput();
         if (knowledgeDocumentRepository.count() == 0) {
             return "Knowledge base is empty.";
         }
-        List<Document> found = retrieveMerged(prompt);
+        List<Document> found = retrieveMerged(safePrompt);
         if (found.isEmpty()) {
-            logUnknownQuery(prompt, null);
+            logUnknownQuery(safePrompt, null);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         }
-        String reply = generateRagAnswer(found, prompt, List.of());
+        String reply = generateRagAnswer(found, safePrompt, List.of());
+        reply = applyOutboundGovernance(safePrompt, reply);
         if (isRagInsufficientReply(reply)) {
-            logUnknownQuery(prompt, null);
+            logUnknownQuery(safePrompt, null);
         }
         return reply;
     }
@@ -111,19 +125,26 @@ public class LlmChatService implements ChatService {
     public ChatConversationResponse askAIWithHistory(String conversationId, String message) {
         String id = conversationHistoryService.resolveOrCreateConversationId(conversationId);
         List<Message> history = conversationHistoryService.snapshot(id);
+        SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(message);
+        if (!decision.allowed()) {
+            conversationHistoryService.append(id, message, decision.userMessage());
+            return new ChatConversationResponse(id, decision.userMessage());
+        }
+        String safeMessage = decision.safeInput();
         String reply;
         try {
             List<Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(SYSTEM_PLAIN));
             messages.addAll(history);
-            messages.add(new UserMessage(message));
+            messages.add(new UserMessage(safeMessage));
             ChatResponse response = chatModel.call(new Prompt(messages));
             reply = extractAssistantText(response);
+            reply = applyOutboundGovernance(safeMessage, reply);
         } catch (Exception e) {
             System.err.println("Chat model error: " + e.getMessage());
             reply = "Sorry, the AI service is temporarily unavailable. Please try again later.";
         }
-        conversationHistoryService.append(id, message, reply);
+        conversationHistoryService.append(id, safeMessage, reply);
         return new ChatConversationResponse(id, reply);
     }
 
@@ -131,27 +152,34 @@ public class LlmChatService implements ChatService {
     public ChatConversationResponse askAIWithContextAndHistory(String conversationId, String message) {
         String id = conversationHistoryService.resolveOrCreateConversationId(conversationId);
         List<Message> history = conversationHistoryService.snapshot(id);
+        SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(message);
+        if (!decision.allowed()) {
+            conversationHistoryService.append(id, message, decision.userMessage());
+            return new ChatConversationResponse(id, decision.userMessage());
+        }
+        String safeMessage = decision.safeInput();
 
         if (knowledgeDocumentRepository.count() == 0) {
             String reply = "Knowledge base is empty.";
-            conversationHistoryService.append(id, message, reply);
+            conversationHistoryService.append(id, safeMessage, reply);
             return new ChatConversationResponse(id, reply);
         }
 
-        String retrievalQuery = buildRetrievalQuery(history, message);
+        String retrievalQuery = buildRetrievalQuery(history, safeMessage);
         List<Document> found = retrieveMerged(retrievalQuery);
         String reply;
         if (found.isEmpty()) {
-            logUnknownQuery(message, id);
+            logUnknownQuery(safeMessage, id);
             reply =
                     "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         } else {
-            reply = generateRagAnswer(found, message, history);
+            reply = generateRagAnswer(found, safeMessage, history);
+            reply = applyOutboundGovernance(safeMessage, reply);
             if (isRagInsufficientReply(reply)) {
-                logUnknownQuery(message, id);
+                logUnknownQuery(safeMessage, id);
             }
         }
-        conversationHistoryService.append(id, message, reply);
+        conversationHistoryService.append(id, safeMessage, reply);
         return new ChatConversationResponse(id, reply);
     }
 
@@ -242,6 +270,12 @@ public class LlmChatService implements ChatService {
             return "";
         }
         return output.getText();
+    }
+
+    private String applyOutboundGovernance(String originalInput, String rawReply) {
+        SecurityGovernanceService.GovernanceDecision decision =
+                securityGovernanceService.checkOutboundResponse(originalInput, rawReply);
+        return decision.allowed() ? decision.safeInput() : decision.userMessage();
     }
 
     /** Curated FAQ chunks use category != SRS; prefer them when present in the similarity pool. */

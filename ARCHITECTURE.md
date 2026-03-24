@@ -39,6 +39,7 @@ The app follows a classic **Spring MVC** layout:
 ```
 HTTP (JSON/text)
     → ChatController
+        → SecurityGovernanceService (request validation, policy checks)
         → ChatService (interface)
             → LlmChatService
                 → ChatModel (Spring AI — provider from config) + HybridRetrievalService
@@ -70,6 +71,7 @@ RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector 
 | `service.impl.LlmChatService` | **`ChatModel`** + RAG orchestration; merges short-term history into prompts and retrieval query |
 | `service.HybridRetrievalService` | Hybrid retrieval starter: vector search + keyword ranking + reciprocal-rank fusion |
 | `service.RerankingService` | LLM-based reranking layer that scores retrieval candidates and keeps top-k |
+| `service.SecurityGovernanceService` | Security and governance layer that validates inbound requests before chat/RAG processing |
 | `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[QUESTION]`, `[INSTRUCTIONS]` and source labels |
 | `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
 | `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
@@ -91,6 +93,8 @@ RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector 
 | `POST /ai-chat/chat/rag` | Raw string (message) | Calls **`askAIWithContext`**: embed query, retrieve similar KB docs, then **generate** with KB-only instructions. |
 | `POST /ai-chat/chat/conversation` | JSON `{"message":"…","conversationId":"…"}` — `conversationId` optional | Plain chat with **short-term history**: prior turns + current message. Response JSON: **`conversationId`**, **`reply`**. |
 | `POST /ai-chat/chat/rag/conversation` | Same JSON shape | RAG with history: retrieval uses a **combined query** when the latest message is short (e.g. “yes”) so it aligns with the **previous user** line; generation sees history + KB excerpts. |
+
+All chat endpoints run through a **Security & Governance** check first. Requests that violate policy (empty payload, over-limit size, or blocked sensitive patterns) are rejected before retrieval/model execution. Responses are also post-checked for customer-id integrity to prevent ID drift (for example, `customer id 123` changing in generated output).
 
 Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e.g. **`http://localhost:8080/ai-chat/swagger-ui.html`**).
 
@@ -146,6 +150,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 `src/main/resources/application.yml` plus **`application-{profile}.yml`** (SRP-style):
 
 - **`conf:`** — single place for app name, server port/context-path, Mongo (**`MONGODB_URI`** optional for TLS / full connection string), Ollama models/URL, springdoc toggles, logging levels, multipart limits, **`conf.chat.history-max-messages`** and **`conf.chat.history-session-ttl-hours`** for conversation endpoints.
+- **Security & governance** — **`conf.security.enabled`**, **`conf.security.max-input-chars`**, and **`conf.security.blocked-patterns`** enforce mandatory inbound policy checks before any LLM or RAG action.
 - **Hybrid retrieval tuning** — **`conf.rag.hybrid.enabled`**, **`conf.rag.hybrid.keyword-top-k`**, **`conf.rag.hybrid.vector-weight`**, **`conf.rag.hybrid.keyword-weight`** control vector+keyword fusion behavior.
 - **Reranking tuning** — **`conf.rag.rerank.enabled`** and **`conf.rag.rerank.top-k`** control LLM-based candidate reranking.
 - **Embedding consistency controls** — **`conf.kb.embedding-metadata.model-tag`** + **`conf.kb.embedding-metadata.version`** are stamped on new KB chunks; **`conf.kb.embedding-compatibility.strict`** controls whether mismatches are warn-only (`false`) or excluded from retrieval (`true`).

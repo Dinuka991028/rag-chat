@@ -135,6 +135,11 @@ conf:
   chat:
     history-max-messages: 20
     history-session-ttl-hours: 24
+  # Security and governance guardrails (checked before LLM/RAG processing).
+  security:
+    enabled: true
+    max-input-chars: 4000
+    blocked-patterns: "ssn,credit card,password,api key,private key,authorization: bearer"
   rag:
     hybrid:
       enabled: true
