@@ -5,6 +5,8 @@ import ai_chat.kb.SrsChunker;
 import ai_chat.kb.SrsMarkdownChunker;
 import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -45,6 +47,18 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
     @Autowired
     private ResourceLoader resourceLoader;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Value("${conf.kb.json-enabled:true}")
+    private boolean kbJsonEnabled;
+
+    @Value("${conf.kb.json-vessel-services-classpath:classpath:kb/vessel-registration-3-services-kb-text-category-source.json}")
+    private String vesselRegistrationServicesJsonClasspath;
+
+    @Value("${conf.kb.json-validations-classpath:classpath:kb/vessel-registration-validations-kb-format.json}")
+    private String vesselRegistrationValidationsJsonClasspath;
+
     @Value("${conf.kb.srs-pdf-enabled:true}")
     private boolean srsPdfEnabled;
 
@@ -73,15 +87,17 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
 
         List<Document> seeds = new ArrayList<>();
         seeds.addAll(curatedFaqDocuments());
+        seeds.addAll(loadKbJsonDocuments());
         seeds.addAll(loadSrsKnowledgeDocuments());
 
         if (seeds.isEmpty()) {
-            log.warn("KB not seeded: add curated FAQ in code and/or place ssrp-srs.pdf / ssrp-srs-llm.md under src/main/resources/kb/.");
+            log.warn(
+                    "KB not seeded: add curated FAQ in code and/or place kb JSON and/or ssrp-srs.pdf / ssrp-srs-llm.md under src/main/resources/kb/.");
             return;
         }
 
         vectorStore.add(seeds);
-        log.info("KB seeded with {} document(s) (curated FAQ + SRS) (VectorStore.add)", seeds.size());
+        log.info("KB seeded with {} document(s) (curated FAQ + KB JSON + SRS) (VectorStore.add)", seeds.size());
     }
 
     /** Short, customer-tested answers; category is not {@code SRS} so retrieval can prefer these over raw PDF chunks. */
@@ -168,6 +184,55 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
                 .metadata("category", category)
                 .metadata("source", source)
                 .build();
+    }
+
+    private List<Document> loadKbJsonDocuments() {
+        if (!kbJsonEnabled) {
+            return List.of();
+        }
+
+        List<Document> out = new ArrayList<>();
+        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationServicesJsonClasspath, "vessel-registration-3-services-kb-text-category-source.json"));
+        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationValidationsJsonClasspath, "vessel-registration-validations-kb-format.json"));
+        return out;
+    }
+
+    private List<Document> loadKbJsonArrayDocuments(String jsonClasspath, String humanName) {
+        Resource resource = resourceLoader.getResource(jsonClasspath);
+        if (!resource.exists() || !resource.isReadable()) {
+            log.info("KB JSON not found at {} — skipping ({})", jsonClasspath, humanName);
+            return List.of();
+        }
+        try (InputStream in = resource.getInputStream()) {
+            List<KbTextCategorySourceItem> items =
+                    objectMapper.readValue(in, new TypeReference<List<KbTextCategorySourceItem>>() {
+                    });
+            if (items == null || items.isEmpty()) {
+                log.info("KB JSON {} had no items — skipping", humanName);
+                return List.of();
+            }
+
+            List<Document> docs = new ArrayList<>(items.size());
+            for (KbTextCategorySourceItem it : items) {
+                if (it == null || it.text() == null || it.text().isBlank()) {
+                    continue;
+                }
+                docs.add(Document.builder()
+                        .text(it.text())
+                        .metadata("category", it.category())
+                        .metadata("source", it.source())
+                        .build());
+            }
+
+            log.info("Indexed KB JSON: {} document(s) from {}", docs.size(), humanName);
+            return docs;
+        } catch (IOException e) {
+            log.warn("Could not read KB JSON at {} ({}): {}", jsonClasspath, humanName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private record KbTextCategorySourceItem(String text, String category, String source) {
     }
 
     private List<Document> loadSrsKnowledgeDocuments() {

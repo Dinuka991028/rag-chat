@@ -1,0 +1,807 @@
+[
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.typeOfShip\nDisabled: true",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.typeOfShip"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.typeOfShip\nDisabled: true",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.typeOfShip"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.classification\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.classification"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.classification\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.classification"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.classificationOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"classification\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.classificationOther"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.classificationOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"classification\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.classificationOther"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.shipName\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nCustomValidation: {\"type\":\"vesselNameAvailability\",\"method\":\"validateVesselName(type=0)\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.shipName"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.shipName\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nCustomValidation: {\"type\":\"vesselNameAvailability\",\"method\":\"validateVesselName(type=0)\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.shipName"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.shipNumber\nValidators: {\"maxLength\":20}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.shipNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.shipNumber\nValidators: {\"maxLength\":20}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.shipNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.typeOfHull\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.typeOfHull"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.typeOfHull\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.typeOfHull"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.typeOfHullOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"typeOfHull\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.typeOfHullOther"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.typeOfHullOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"typeOfHull\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.typeOfHullOther"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.hullNumber\nValidators: {\"required\":true,\"maxLength\":50,\"pattern\":\"inline:/^[a-zA-Z0-9 \\\\-\\\\/\\\\.]*$/\"}\nCustomValidation: {\"type\":\"hullNumberAvailability\",\"method\":\"checkHullNumberAvailability()\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.hullNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.hullNumber\nValidators: {\"required\":true,\"maxLength\":50,\"pattern\":\"inline:/^[a-zA-Z0-9 \\\\-\\\\/\\\\.]*$/\"}\nCustomValidation: {\"type\":\"hullNumberAvailability\",\"method\":\"checkHullNumberAvailability()\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.hullNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.hullColor\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.hullColor"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.hullColor\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.hullColor"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.berthingPlace\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.berthingPlace"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.berthingPlace\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.berthingPlace"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.berthingPlaceOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"berthingPlace\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.berthingPlaceOther"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.berthingPlaceOther\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"berthingPlace\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.berthingPlaceOther"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.portOfRegistry\nDisabled: true",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.portOfRegistry"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.portOfRegistry\nDisabled: true",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.portOfRegistry"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.dateOfBuild\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.dateOfBuild"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.dateOfBuild\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.dateOfBuild"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.placeOfBuild\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.placeOfBuild"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.placeOfBuild\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.placeOfBuild"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.previouslyRegistered\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.previouslyRegistered"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.previouslyRegistered\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.previouslyRegistered"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.previousNamesOfShip\nValidators: {\"maxLength\":150,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.previousNamesOfShip"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.previousNamesOfShip\nValidators: {\"maxLength\":150,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.previousNamesOfShip"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.previousRegistrationNumber\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.previousRegistrationNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.previousRegistrationNumber\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.previousRegistrationNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.previousRegistrationDate\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.previousRegistrationDate"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.previousRegistrationDate\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.previousRegistrationDate"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.previousPortOfRegistry\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.previousPortOfRegistry"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.previousPortOfRegistry\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.previousPortOfRegistry"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.netTonnage\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.netTonnage"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.netTonnage\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.netTonnage"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.grossTonnage\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.grossTonnage"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.grossTonnage\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.grossTonnage"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.draft\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.draft"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.draft\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.draft"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.depth\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.depth"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.depth\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.depth"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.beam\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.beam"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.beam\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.beam"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.lengthOA\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.lengthOA"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.lengthOA\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.lengthOA"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.noOfCrews\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_REGEX\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.noOfCrews"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.noOfCrews\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_REGEX\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.noOfCrews"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.noOfPassengers\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_REGEX\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.noOfPassengers"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.noOfPassengers\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_REGEX\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.noOfPassengers"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.instancesOfImpounding\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.instancesOfImpounding"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.instancesOfImpounding\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.instancesOfImpounding"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.rightsInKind\nValidators: {\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.rightsInKind"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.rightsInKind\nValidators: {\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.rightsInKind"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.printingHouse\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.printingHouse"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.printingHouse\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.printingHouse"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.acquisitionOfOwnership\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.acquisitionOfOwnership"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.acquisitionOfOwnership\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.acquisitionOfOwnership"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.vesselMortgaged\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.vesselMortgaged"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.vesselMortgaged\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.vesselMortgaged"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.mortgageInformationBankName\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.mortgageInformationBankName"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.mortgageInformationBankName\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.mortgageInformationBankName"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.mortgageInformationBankNameOther\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"and\":[{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},{\"formGroup\":\"shipDetailForm\",\"field\":\"mortgageInformationBankName\",\"equals\":\"Other\"}]},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.mortgageInformationBankNameOther"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.mortgageInformationBankNameOther\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"and\":[{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},{\"formGroup\":\"shipDetailForm\",\"field\":\"mortgageInformationBankName\",\"equals\":\"Other\"}]},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.mortgageInformationBankNameOther"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDetailForm.mortgageNumber\nValidators: {\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDetailForm.mortgageNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDetailForm.mortgageNumber\nValidators: {\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}\nConditionalRequired: {\"when\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDetailForm.mortgageNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> alternativeShipNamesForm.name1\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.alternativeShipNamesForm.name1"
+  },
+  {
+    "text": "Validation: DhowRegistration -> alternativeShipNamesForm.name1\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.alternativeShipNamesForm.name1"
+  },
+  {
+    "text": "Validation: VesselRegistration -> alternativeShipNamesForm.name2\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.alternativeShipNamesForm.name2"
+  },
+  {
+    "text": "Validation: DhowRegistration -> alternativeShipNamesForm.name2\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.alternativeShipNamesForm.name2"
+  },
+  {
+    "text": "Validation: VesselRegistration -> alternativeShipNamesForm.name3\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.alternativeShipNamesForm.name3"
+  },
+  {
+    "text": "Validation: DhowRegistration -> alternativeShipNamesForm.name3\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.alternativeShipNamesForm.name3"
+  },
+  {
+    "text": "Validation: VesselRegistration -> alternativeShipNamesForm.name4\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.alternativeShipNamesForm.name4"
+  },
+  {
+    "text": "Validation: DhowRegistration -> alternativeShipNamesForm.name4\nValidators: {\"required\":true,\"maxLength\":13,\"pattern\":\"CommonConstants.DISALLOWED_CHARACTERS\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.alternativeShipNamesForm.name4"
+  },
+  {
+    "text": "Validation: VesselRegistration -> engineForm.engineNo\nValidators: {\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.engineForm.engineNo"
+  },
+  {
+    "text": "Validation: DhowRegistration -> engineForm.engineNo\nValidators: {\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.engineForm.engineNo"
+  },
+  {
+    "text": "Validation: VesselRegistration -> engineForm.enginesType\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.engineForm.enginesType"
+  },
+  {
+    "text": "Validation: DhowRegistration -> engineForm.enginesType\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.engineForm.enginesType"
+  },
+  {
+    "text": "Validation: VesselRegistration -> engineForm.enginesTypeOther\nConditionalRequired: {\"when\":{\"formGroup\":\"engineForm\",\"field\":\"enginesType\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.engineForm.enginesTypeOther"
+  },
+  {
+    "text": "Validation: DhowRegistration -> engineForm.enginesTypeOther\nConditionalRequired: {\"when\":{\"formGroup\":\"engineForm\",\"field\":\"enginesType\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.engineForm.enginesTypeOther"
+  },
+  {
+    "text": "Validation: VesselRegistration -> engineForm.hp\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_SPEC_CHAR\"}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.engineForm.hp"
+  },
+  {
+    "text": "Validation: DhowRegistration -> engineForm.hp\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_SPEC_CHAR\"}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.engineForm.hp"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.buyerType\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.buyerType"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.buyerType\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.buyerType"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.idNumber\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.idNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.idNumber\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.idNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.popUpName",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.popUpName"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.popUpName",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.popUpName"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.popUpNationality",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.popUpNationality"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.popUpNationality",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.popUpNationality"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.popUpAddress",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.popUpAddress"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.popUpAddress",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.popUpAddress"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.popUpPhoneNumber",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.popUpPhoneNumber"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.popUpPhoneNumber",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.popUpPhoneNumber"
+  },
+  {
+    "text": "Validation: VesselRegistration -> ownerDetailPopUpForm.popUpEmail",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.ownerDetailPopUpForm.popUpEmail"
+  },
+  {
+    "text": "Validation: DhowRegistration -> ownerDetailPopUpForm.popUpEmail",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.ownerDetailPopUpForm.popUpEmail"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.copyOfCPR\nValidators: {\"required\":true}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.copyOfCPR"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.copyOfCPR\nValidators: {\"required\":true}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.copyOfCPR"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.builderCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"No\"}}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.builderCertificate"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.builderCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"No\"}}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.builderCertificate"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.deletionCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"}}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.deletionCertificate"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.deletionCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"}}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.deletionCertificate"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.customsDeclaration\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"placeOfBuild\",\"notEquals\":\"Bahrain\"}}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.customsDeclaration"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.customsDeclaration\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"placeOfBuild\",\"notEquals\":\"Bahrain\"}}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.customsDeclaration"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.mortgageDeed\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"}}",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.mortgageDeed"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.mortgageDeed\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"shipDetailForm\",\"field\":\"vesselMortgaged\",\"equals\":\"Yes\"}}",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.mortgageDeed"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.billOfSale",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.billOfSale"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.billOfSale",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.billOfSale"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.otherDocument",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.otherDocument"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.otherDocument",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.otherDocument"
+  },
+  {
+    "text": "Validation: VesselRegistration -> shipDocumentDetailForm.vesselImage",
+    "category": "BoatRegistration",
+    "source": "validation.VesselRegistration.shipDocumentDetailForm.vesselImage"
+  },
+  {
+    "text": "Validation: DhowRegistration -> shipDocumentDetailForm.vesselImage",
+    "category": "DhowRegistration",
+    "source": "validation.DhowRegistration.shipDocumentDetailForm.vesselImage"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.jetSkiNumber\nValidators: {\"maxLength\":20}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.jetSkiNumber"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.typeOfHull\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.typeOfHull"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.typeOfHullOther\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"typeOfHull\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.typeOfHullOther"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.hullNumber\nValidators: {\"required\":true,\"maxLength\":50,\"pattern\":\"inline:/^[a-zA-Z0-9 \\\\-\\\\/\\\\.]*$/\"}\nCustomValidation: {\"type\":\"hullNumberAvailability\",\"method\":\"checkHullNumberAvailability()\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.hullNumber"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.hullColor\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.hullColor"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.berthingPlace\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.berthingPlace"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.berthingPlaceOther\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"berthingPlace\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.berthingPlaceOther"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.portOfRegistry\nDisabled: true",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.portOfRegistry"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.dateOfBuild\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.dateOfBuild"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.placeOfBuild\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.placeOfBuild"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.engineNo\nValidators: {\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.engineNo"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.enginesType\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.enginesType"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.enginesTypeOther\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"enginesType\",\"equals\":\"Other\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.enginesTypeOther"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.hp\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_SPEC_CHAR\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.hp"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.previouslyRegistered\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.previouslyRegistered"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.previousRegistrationNumber\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.previousRegistrationNumber"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.previousRegistrationDate\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.previousRegistrationDate"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.previousPortOfRegistry\nValidators: {\"maxLength\":100}\nConditionalRequired: {\"when\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"},\"thenRequired\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.previousPortOfRegistry"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.netTonnage\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.netTonnage"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.grossTonnage\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.grossTonnage"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.draft\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.draft"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.depth\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.depth"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.beam\nValidators: {\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.beam"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.lengthOA\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_AND_DECIMAL\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.lengthOA"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.noOfPassengers\nValidators: {\"required\":true,\"maxLength\":100,\"pattern\":\"CommonConstants.NUMBER_REGEX\"}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.noOfPassengers"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.acquisitionOfOwnership\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.acquisitionOfOwnership"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.instancesOfImpounding\nValidators: {\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.instancesOfImpounding"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> jetSkiDetailForm.printingHouse\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.jetSkiDetailForm.printingHouse"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.ownerType\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.ownerType"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.idNumber\nValidators: {\"required\":true,\"maxLength\":100}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.idNumber"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.popUpName",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.popUpName"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.popUpNationality",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.popUpNationality"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.popUpAddress",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.popUpAddress"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.popUpPhoneNumber",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.popUpPhoneNumber"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> ownerDetailPopUpForm.popUpEmail",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.ownerDetailPopUpForm.popUpEmail"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.copyOfCpr\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.copyOfCpr"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.builderCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"No\"}}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.builderCertificate"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.deletionCertificate\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"previouslyRegistered\",\"equals\":\"Yes\"}}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.deletionCertificate"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.customsDeclaration\nValidators: {\"required\":true}\nConditionalRequired: {\"thenRequiredWhen\":{\"formGroup\":\"jetSkiDetailForm\",\"field\":\"placeOfBuild\",\"notEquals\":\"Bahrain\"}}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.customsDeclaration"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.jetSkiImage",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.jetSkiImage"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.other",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.other"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.photoOfJetSki",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.photoOfJetSki"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.billOfSale",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.billOfSale"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> requiredDocumentForm.insuranceCert",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.requiredDocumentForm.insuranceCert"
+  },
+  {
+    "text": "Validation: JetSkiRegistration -> imageUploadForm.imageProof\nValidators: {\"required\":true}",
+    "category": "JetSkiRegistration",
+    "source": "validation.JetSkiRegistration.imageUploadForm.imageProof"
+  }
+]
