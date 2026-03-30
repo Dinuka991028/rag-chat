@@ -4,7 +4,6 @@ import org.springframework.ai.document.Document;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Builds structured prompt payloads to improve grounding and reduce hallucinations.
@@ -17,10 +16,9 @@ public class PromptBuilderService {
                     + "- If context is insufficient or unclear, reply exactly: Sorry, I don't have enough information to answer that right now.\n"
                     + "- Do NOT use outside knowledge.\n"
                     + "- Write in clear, customer-friendly language.\n"
-                    + "- Do not mention [CONTEXT], sources, or how you generated the answer.\n"
+                    + "- Do not mention [CONTEXT], sources, metadata, or how you generated the answer.\n"
                     + "- Start directly with the answer (no lead-ins like \"Based on the provided context\").\n"
-                    + "- Keep the answer concise (2-5 sentences).\n"
-                    + "- If source labels are present in context, cite them inline when relevant.";
+                    + "- Keep the answer concise (2-5 sentences).";
 
     public String buildRagPayload(List<Document> found, String customerQuestion) {
         StringBuilder context = new StringBuilder();
@@ -30,7 +28,6 @@ public class PromptBuilderService {
                 continue;
             }
             context.append("- ");
-            appendSourceLabel(context, d.getMetadata());
             context.append(text.trim()).append("\n\n");
         }
 
@@ -40,22 +37,5 @@ public class PromptBuilderService {
                 + (customerQuestion == null ? "" : customerQuestion.trim())
                 + "\n\n[INSTRUCTIONS]\n"
                 + RAG_INSTRUCTIONS;
-    }
-
-    private static void appendSourceLabel(StringBuilder out, Map<String, Object> metadata) {
-        if (metadata == null) {
-            return;
-        }
-        Object source = metadata.get("source");
-        Object heading = metadata.get("sectionHeading");
-        if (source == null && heading == null) {
-            return;
-        }
-        out.append("[source=");
-        out.append(source == null ? "unknown" : String.valueOf(source));
-        if (heading != null && !String.valueOf(heading).isBlank()) {
-            out.append(", section=").append(String.valueOf(heading));
-        }
-        out.append("] ");
     }
 }
