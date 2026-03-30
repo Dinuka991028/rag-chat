@@ -16,7 +16,10 @@ public class PromptBuilderService {
             "- Answer ONLY using [CONTEXT].\n"
                     + "- If context is insufficient or unclear, reply exactly: Sorry, I don't have enough information to answer that right now.\n"
                     + "- Do NOT use outside knowledge.\n"
-                    + "- Keep the answer concise and formal.\n"
+                    + "- Write in clear, customer-friendly language.\n"
+                    + "- Do not mention [CONTEXT], sources, or how you generated the answer.\n"
+                    + "- Start directly with the answer (no lead-ins like \"Based on the provided context\").\n"
+                    + "- Keep the answer concise (2-5 sentences).\n"
                     + "- If source labels are present in context, cite them inline when relevant.";
 
     public String buildRagPayload(List<Document> found, String customerQuestion) {
