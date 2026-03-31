@@ -208,7 +208,7 @@ public class LlmChatService implements ChatService {
     }
 
     private List<Document> retrieveMerged(String retrievalQuery, String role) {
-        List<Document> raw = hybridRetrievalService.retrieve(retrievalQuery, RAG_FETCH_POOL, RAG_SIMILARITY_THRESHOLD);
+        List<Document> raw = hybridRetrievalService.retrieve(retrievalQuery, RAG_FETCH_POOL, RAG_SIMILARITY_THRESHOLD, role);
         List<Document> scoped = filterByRole(raw, role);
         if (scoped.isEmpty()) {
             return List.of();
