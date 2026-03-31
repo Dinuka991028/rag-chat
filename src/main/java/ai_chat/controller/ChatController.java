@@ -30,8 +30,10 @@ public class ChatController {
 
     @PostMapping("/rag")
     @Operation(summary = "Send a message using RAG with AI")
-    public String chatRAG(@RequestBody String message) {
-        return chatService.askAIWithContext(message);
+    public String chatRAG(
+            @RequestBody String message,
+            @RequestParam(value = "role", required = false) String role) {
+        return chatService.askAIWithContext(message, role);
     }
 
     @PostMapping("/conversation")
@@ -54,7 +56,7 @@ public class ChatController {
     public ChatConversationResponse chatRagWithHistory(@RequestBody ChatConversationRequest body) {
         requireMessage(body);
         validateConversationIdLength(body.getConversationId());
-        return chatService.askAIWithContextAndHistory(body.getConversationId(), body.getMessage());
+        return chatService.askAIWithContextAndHistory(body.getConversationId(), body.getMessage(), body.getRole());
     }
 
     private static void requireMessage(ChatConversationRequest body) {

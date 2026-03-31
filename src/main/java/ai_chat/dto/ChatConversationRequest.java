@@ -12,6 +12,8 @@ public class ChatConversationRequest {
     private String conversationId;
 
     private String message;
+    /** Optional chat role context. Defaults to customer when omitted. */
+    private String role;
 
     public String getConversationId() {
         return conversationId;
@@ -27,5 +29,13 @@ public class ChatConversationRequest {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

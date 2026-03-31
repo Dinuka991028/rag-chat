@@ -58,6 +58,14 @@ public class LlmChatService implements ChatService {
                     + "Do not suggest unrelated processes (for example renewal or payment flows) as a workaround when the question was about something else.\n"
                     + "Do not give long hedging answers when the excerpts are missing or only loosely related.";
 
+    private static final String SYSTEM_RAG_OFFICER =
+            "You are an internal AI assistant for SSRP registry officers in Bahrain.\n"
+                    + "Use ONLY the knowledge base excerpts in the user message. Do not use outside knowledge.\n"
+                    + "Reply in concise internal-operations style with practical next steps when directly supported by excerpts.\n"
+                    + "If the excerpts do not clearly and directly answer the question, respond ONLY with exactly: "
+                    + "Sorry, I don't have enough information to answer that right now.\n"
+                    + "Do not invent section numbers, system statuses, process stages, or approval outcomes not present in excerpts.";
+
     @Autowired
     private ChatModel chatModel;
 
@@ -100,20 +108,26 @@ public class LlmChatService implements ChatService {
 
     @Override
     public String askAIWithContext(String prompt) {
+        return askAIWithContext(prompt, null);
+    }
+
+    @Override
+    public String askAIWithContext(String prompt, String role) {
         SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(prompt);
         if (!decision.allowed()) {
             return decision.userMessage();
         }
         String safePrompt = decision.safeInput();
+        String effectiveRole = normalizeRole(role);
         if (knowledgeDocumentRepository.count() == 0) {
             return "Knowledge base is empty.";
         }
-        List<Document> found = retrieveMerged(safePrompt);
+        List<Document> found = retrieveMerged(safePrompt, effectiveRole);
         if (found.isEmpty()) {
             logUnknownQuery(safePrompt, null);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         }
-        String reply = generateRagAnswer(found, safePrompt, List.of());
+        String reply = generateRagAnswer(found, safePrompt, List.of(), effectiveRole);
         reply = applyOutboundGovernance(safePrompt, reply);
         if (isRagInsufficientReply(reply)) {
             logUnknownQuery(safePrompt, null);
@@ -150,6 +164,11 @@ public class LlmChatService implements ChatService {
 
     @Override
     public ChatConversationResponse askAIWithContextAndHistory(String conversationId, String message) {
+        return askAIWithContextAndHistory(conversationId, message, null);
+    }
+
+    @Override
+    public ChatConversationResponse askAIWithContextAndHistory(String conversationId, String message, String role) {
         String id = conversationHistoryService.resolveOrCreateConversationId(conversationId);
         List<Message> history = conversationHistoryService.snapshot(id);
         SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(message);
@@ -158,6 +177,7 @@ public class LlmChatService implements ChatService {
             return new ChatConversationResponse(id, decision.userMessage());
         }
         String safeMessage = decision.safeInput();
+        String effectiveRole = normalizeRole(role);
 
         if (knowledgeDocumentRepository.count() == 0) {
             String reply = "Knowledge base is empty.";
@@ -166,14 +186,14 @@ public class LlmChatService implements ChatService {
         }
 
         String retrievalQuery = buildRetrievalQuery(history, safeMessage);
-        List<Document> found = retrieveMerged(retrievalQuery);
+        List<Document> found = retrieveMerged(retrievalQuery, effectiveRole);
         String reply;
         if (found.isEmpty()) {
             logUnknownQuery(safeMessage, id);
             reply =
                     "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         } else {
-            reply = generateRagAnswer(found, safeMessage, history);
+            reply = generateRagAnswer(found, safeMessage, history, effectiveRole);
             reply = applyOutboundGovernance(safeMessage, reply);
             if (isRagInsufficientReply(reply)) {
                 logUnknownQuery(safeMessage, id);
@@ -183,17 +203,22 @@ public class LlmChatService implements ChatService {
         return new ChatConversationResponse(id, reply);
     }
 
-    private List<Document> retrieveMerged(String retrievalQuery) {
+    private List<Document> retrieveMerged(String retrievalQuery, String role) {
         List<Document> raw = hybridRetrievalService.retrieve(retrievalQuery, RAG_FETCH_POOL, RAG_SIMILARITY_THRESHOLD);
-        List<Document> reranked = rerankingService.rerank(retrievalQuery, raw);
+        List<Document> scoped = filterByRole(raw, role);
+        if (scoped.isEmpty()) {
+            return List.of();
+        }
+        List<Document> reranked = rerankingService.rerank(retrievalQuery, scoped);
         return mergeCuratedWithSrs(reranked, RAG_CURATED_CAP, RAG_TOP_K);
     }
 
-    private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent) {
-        String userPayload = promptBuilderService.buildRagPayload(found, customerQuestion);
+    private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent, String role) {
+        String userPayload = promptBuilderService.buildRagPayload(found, customerQuestion, role);
+        String systemPrompt = "officer".equals(normalizeRole(role)) ? SYSTEM_RAG_OFFICER : SYSTEM_RAG;
         try {
             List<Message> messages = new ArrayList<>();
-            messages.add(new SystemMessage(SYSTEM_RAG));
+            messages.add(new SystemMessage(systemPrompt));
             messages.addAll(historyBeforeCurrent);
             messages.add(new UserMessage(userPayload));
             ChatResponse response = chatModel.call(new Prompt(messages));
@@ -285,7 +310,48 @@ public class LlmChatService implements ChatService {
             return false;
         }
         Object c = meta.get("category");
-        return c != null && !"SRS".equals(String.valueOf(c));
+        if (c == null) {
+            return false;
+        }
+        String category = String.valueOf(c);
+        return !"SRS".equals(category) && !"OfficerJobSummary".equals(category);
+    }
+
+    private static List<Document> filterByRole(List<Document> docs, String role) {
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+        String effectiveRole = normalizeRole(role);
+        List<Document> out = new ArrayList<>(docs.size());
+        for (Document d : docs) {
+            if (matchesRole(d, effectiveRole)) {
+                out.add(d);
+            }
+        }
+        return out;
+    }
+
+    private static boolean matchesRole(Document d, String role) {
+        Map<String, Object> meta = d.getMetadata();
+        String source = meta == null || meta.get("source") == null ? "" : String.valueOf(meta.get("source"));
+        String category = meta == null || meta.get("category") == null ? "" : String.valueOf(meta.get("category"));
+        String audienceRole = meta == null || meta.get("audienceRole") == null ? "" : String.valueOf(meta.get("audienceRole"));
+
+        boolean officerDoc = "officer".equalsIgnoreCase(audienceRole)
+                || source.startsWith("officer-")
+                || "OfficerJobSummary".equalsIgnoreCase(category);
+        if ("officer".equals(role)) {
+            return officerDoc;
+        }
+        return !officerDoc;
+    }
+
+    private static String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "customer";
+        }
+        String r = role.trim().toLowerCase();
+        return "officer".equals(r) ? "officer" : "customer";
     }
 
     /**

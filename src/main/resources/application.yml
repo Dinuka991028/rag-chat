@@ -153,6 +153,11 @@ conf:
       top-k: 8
   # RAG KB: curated FAQ snippets (code) + SRS. Prefer kb/ssrp-srs-llm.md (LLM-friendly) over PDF when present.
   kb:
+    json-enabled: true
+    json-vessel-services-classpath: classpath:kb/vessel-registration-3-services-kb-text-category-source.json
+    json-validations-classpath: classpath:kb/vessel-registration-validations-kb-format.json
+    json-officer-enabled: true
+    json-officer-classpath: classpath:kb/officer_kb.json
     srs-pdf-enabled: true
     srs-pdf-classpath: classpath:kb/ssrp-srs.pdf
     srs-use-markdown: true

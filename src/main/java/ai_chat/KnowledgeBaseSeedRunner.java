@@ -6,7 +6,10 @@ import ai_chat.kb.SrsMarkdownChunker;
 import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -58,6 +61,12 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
 
     @Value("${conf.kb.json-validations-classpath:classpath:kb/vessel-registration-validations-kb-format.json}")
     private String vesselRegistrationValidationsJsonClasspath;
+
+    @Value("${conf.kb.json-officer-enabled:true}")
+    private boolean officerKbJsonEnabled;
+
+    @Value("${conf.kb.json-officer-classpath:classpath:kb/officer_kb.json}")
+    private String officerKbJsonClasspath;
 
     @Value("${conf.kb.srs-pdf-enabled:true}")
     private boolean srsPdfEnabled;
@@ -194,7 +203,122 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         List<Document> out = new ArrayList<>();
         out.addAll(loadKbJsonArrayDocuments(vesselRegistrationServicesJsonClasspath, "vessel-registration-3-services-kb-text-category-source.json"));
         out.addAll(loadKbJsonArrayDocuments(vesselRegistrationValidationsJsonClasspath, "vessel-registration-validations-kb-format.json"));
+        out.addAll(loadOfficerKbJsonDocuments());
         return out;
+    }
+
+    private List<Document> loadOfficerKbJsonDocuments() {
+        if (!officerKbJsonEnabled) {
+            return List.of();
+        }
+        Resource resource = resourceLoader.getResource(officerKbJsonClasspath);
+        if (!resource.exists() || !resource.isReadable()) {
+            log.info("Officer KB JSON not found at {} — skipping", officerKbJsonClasspath);
+            return List.of();
+        }
+        List<Document> docs = new ArrayList<>();
+        try (InputStream in = resource.getInputStream();
+             JsonParser parser = objectMapper.getFactory().createParser(in)) {
+            if (parser.nextToken() != JsonToken.START_ARRAY) {
+                log.warn("Officer KB JSON at {} is not an array; skipping", officerKbJsonClasspath);
+                return List.of();
+            }
+            int idx = 0;
+            while (parser.nextToken() == JsonToken.START_OBJECT) {
+                JsonNode row = objectMapper.readTree(parser);
+                String text = buildOfficerSummaryText(row);
+                if (text == null || text.isBlank()) {
+                    continue;
+                }
+                Document doc = Document.builder()
+                        .text(text)
+                        .metadata("category", "OfficerJobSummary")
+                        .metadata("source", "officer-kb-json")
+                        .metadata("audienceRole", "officer")
+                        .metadata("chunkIndex", idx++)
+                        .build();
+                docs.add(doc);
+            }
+            log.info("Indexed Officer KB JSON: {} document(s) from {}", docs.size(), officerKbJsonClasspath);
+            return docs;
+        } catch (IOException e) {
+            log.warn("Could not read Officer KB JSON at {}: {}", officerKbJsonClasspath, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static String buildOfficerSummaryText(JsonNode row) {
+        if (row == null || row.isMissingNode() || row.isNull()) {
+            return "";
+        }
+        String jobId = extractFlexibleString(row.get("jobId"));
+        String taskId = extractFlexibleString(row.get("taskId"));
+        String taskName = extractFlexibleString(row.get("taskName"));
+        String serviceId = extractFlexibleString(row.get("serviceId"));
+        String serviceName = extractFlexibleString(row.get("serviceName"));
+        String shipNumber = extractFlexibleString(row.get("shipNumber"));
+        String shipName = extractFlexibleString(row.get("shipName"));
+        String vesselType = extractFlexibleString(row.get("vesselType"));
+        String customerId = extractFlexibleString(row.get("customerId"));
+        String customerName = extractFlexibleString(row.get("customerName"));
+        String serialNumber = extractFlexibleString(row.get("serialNumber"));
+        String submitDate = extractFlexibleString(row.get("submitDate"));
+        String completedDate = extractFlexibleString(row.get("completedDate"));
+        String taskStatus = extractFlexibleString(row.get("taskStatus"));
+        String processInstanceId = extractFlexibleString(row.get("processInstanceId"));
+        String taskAction = extractFlexibleString(row.get("taskAction"));
+
+        StringBuilder sb = new StringBuilder();
+        appendLine(sb, "Officer case summary");
+        appendLine(sb, "Job ID", jobId);
+        appendLine(sb, "Task ID", taskId);
+        appendLine(sb, "Task Name", taskName);
+        appendLine(sb, "Service ID", serviceId);
+        appendLine(sb, "Service Name", serviceName);
+        appendLine(sb, "Ship Number", shipNumber);
+        appendLine(sb, "Ship Name", shipName);
+        appendLine(sb, "Vessel Type", vesselType);
+        appendLine(sb, "Customer ID", customerId);
+        appendLine(sb, "Customer Name", customerName);
+        appendLine(sb, "Serial Number", serialNumber);
+        appendLine(sb, "Submit Date", submitDate);
+        appendLine(sb, "Completed Date", completedDate);
+        appendLine(sb, "Task Status", taskStatus);
+        appendLine(sb, "Process Instance ID", processInstanceId);
+        appendLine(sb, "Task Action", taskAction);
+        return sb.toString().trim();
+    }
+
+    private static String extractFlexibleString(JsonNode n) {
+        if (n == null || n.isMissingNode() || n.isNull()) {
+            return "";
+        }
+        if (n.isTextual() || n.isNumber() || n.isBoolean()) {
+            return n.asText();
+        }
+        if (n.isObject()) {
+            JsonNode oid = n.get("$oid");
+            if (oid != null && !oid.isNull()) {
+                return oid.asText("");
+            }
+            JsonNode numberLong = n.get("$numberLong");
+            if (numberLong != null && !numberLong.isNull()) {
+                return numberLong.asText("");
+            }
+        }
+        return "";
+    }
+
+    private static void appendLine(StringBuilder sb, String label, String value) {
+        if (value != null && !value.isBlank()) {
+            sb.append(label).append(": ").append(value.trim()).append('\n');
+        }
+    }
+
+    private static void appendLine(StringBuilder sb, String value) {
+        if (value != null && !value.isBlank()) {
+            sb.append(value.trim()).append('\n');
+        }
     }
 
     private List<Document> loadKbJsonArrayDocuments(String jsonClasspath, String humanName) {
