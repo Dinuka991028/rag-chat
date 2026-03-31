@@ -24,7 +24,10 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Plain + RAG chat via Spring AI {@link ChatModel}; provider is chosen only in configuration ({@code conf.ai.chat-provider}). */
 @Service
@@ -41,6 +44,7 @@ public class LlmChatService implements ChatService {
 
     /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
     private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
+    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
 
     private static final String SYSTEM_PLAIN =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
@@ -209,6 +213,12 @@ public class LlmChatService implements ChatService {
         if (scoped.isEmpty()) {
             return List.of();
         }
+        if ("officer".equals(normalizeRole(role))) {
+            List<Document> officerFastPath = officerEntityIntentFastPath(scoped, retrievalQuery);
+            if (!officerFastPath.isEmpty()) {
+                return cap(officerFastPath, RAG_TOP_K);
+            }
+        }
         List<Document> reranked = rerankingService.rerank(retrievalQuery, scoped);
         return mergeCuratedWithSrs(reranked, RAG_CURATED_CAP, RAG_TOP_K);
     }
@@ -352,6 +362,82 @@ public class LlmChatService implements ChatService {
         }
         String r = role.trim().toLowerCase();
         return "officer".equals(r) ? "officer" : "customer";
+    }
+
+    /**
+     * Officer-only deterministic retrieval boost for job/case lookups like:
+     * "J-10004 what are pending request".
+     * Keeps current rank order from hybrid retrieval and avoids reranker misses.
+     */
+    private static List<Document> officerEntityIntentFastPath(List<Document> docs, String query) {
+        if (docs == null || docs.isEmpty() || query == null || query.isBlank()) {
+            return List.of();
+        }
+        String shipNumber = extractShipNumber(query);
+        if (shipNumber == null || shipNumber.isBlank()) {
+            return List.of();
+        }
+        List<Document> byShip = filterByContains(docs, "Ship Number: " + shipNumber);
+        if (byShip.isEmpty()) {
+            byShip = filterByContains(docs, shipNumber);
+        }
+        if (byShip.isEmpty()) {
+            return List.of();
+        }
+        String statusIntent = extractStatusIntent(query);
+        if (statusIntent == null) {
+            return byShip;
+        }
+        List<Document> byStatus = filterByContains(byShip, "Task Status: " + statusIntent);
+        if (!byStatus.isEmpty()) {
+            return byStatus;
+        }
+        // If intent exists but no exact-status match was found, keep ship-only matches as fallback.
+        return byShip;
+    }
+
+    private static String extractShipNumber(String query) {
+        Matcher m = SHIP_NUMBER_PATTERN.matcher(query);
+        if (!m.find()) {
+            return null;
+        }
+        return m.group().toUpperCase(Locale.ROOT);
+    }
+
+    private static String extractStatusIntent(String query) {
+        String q = query.toLowerCase(Locale.ROOT);
+        if (q.contains("pending")) {
+            return "PENDING";
+        }
+        if (q.contains("completed") || q.contains("complete")) {
+            return "COMPLETED";
+        }
+        if (q.contains("cancel") || q.contains("canceled") || q.contains("cancelled")) {
+            return "CANCELED";
+        }
+        return null;
+    }
+
+    private static List<Document> filterByContains(List<Document> docs, String needle) {
+        String n = needle.toLowerCase(Locale.ROOT);
+        List<Document> out = new ArrayList<>();
+        for (Document d : docs) {
+            String text = d.getText();
+            if (text != null && text.toLowerCase(Locale.ROOT).contains(n)) {
+                out.add(d);
+            }
+        }
+        return out;
+    }
+
+    private static List<Document> cap(List<Document> docs, int max) {
+        if (docs == null || docs.isEmpty()) {
+            return List.of();
+        }
+        if (docs.size() <= max) {
+            return docs;
+        }
+        return docs.subList(0, max);
     }
 
     /**

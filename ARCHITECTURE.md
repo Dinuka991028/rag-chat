@@ -51,7 +51,7 @@ HTTP (JSON/text)
 
 Supporting pieces:
 
-- **`KnowledgeBaseSeedRunner`** — **`@Order(1)`**, **`@Profile("!test")`**; if the KB is empty, seeds Spring AI **`Document`** chunks and calls **`vectorStore.add(...)`**, which persists **`KnowledgeDocument`** rows **with embeddings** (via **`EmbeddingModel`** inside **`LocalMongoVectorStore`**).
+- **`KnowledgeBaseSeedRunner`** — **`@Order(1)`**, **`@Profile("!test")`**; if the KB is empty, seeds Spring AI **`Document`** chunks and calls **`vectorStore.add(...)`**, which persists **`KnowledgeDocument`** rows **with embeddings** (via **`EmbeddingModel`** inside **`LocalMongoVectorStore`**). Seeding includes customer KB JSON/SRS sources and optional streaming import of `kb/officer_kb.json` into officer-tagged chunks (`audienceRole=officer`, `category=OfficerJobSummary`, `source=officer-kb-json`).
 
 **`LocalMongoVectorStore`** implements **`VectorStore`** (`add` + `similaritySearch`): cosine search over stored embeddings.
 RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector and keyword-ranked results (configurable).
@@ -67,14 +67,14 @@ RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector 
 | `domain.KnowledgeDocument` | Typed Mongo entity for **`kb_documents`** |
 | `repository.KnowledgeDocumentRepository` | `MongoRepository` for KB CRUD |
 | `controller.ChatController` | REST endpoints under `/chat` (full path includes context path, e.g. `/ai-chat/chat`) |
-| `service.ChatService` | Contract: plain + RAG; plus conversation variants returning **`ChatConversationResponse`** |
-| `service.impl.LlmChatService` | **`ChatModel`** + RAG orchestration; merges short-term history into prompts and retrieval query |
+| `service.ChatService` | Contract: plain + RAG (including role-aware overloads); plus conversation variants returning **`ChatConversationResponse`** |
+| `service.impl.LlmChatService` | **`ChatModel`** + RAG orchestration; merges short-term history into prompts/retrieval query and applies role-specific retrieval + prompt behavior |
 | `service.HybridRetrievalService` | Hybrid retrieval starter: vector search + keyword ranking + reciprocal-rank fusion |
 | `service.RerankingService` | LLM-based reranking layer that scores retrieval candidates and keeps top-k |
 | `service.SecurityGovernanceService` | Security and governance layer that validates inbound requests before chat/RAG processing |
-| `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[QUESTION]`, `[INSTRUCTIONS]` and source labels |
+| `service.PromptBuilderService` | Builds structured RAG user payload with `[CONTEXT]`, `[ROLE]`, `[QUESTION]`, `[INSTRUCTIONS]` and role-specific guidance |
 | `service.ConversationHistoryService` | In-memory **`conversationId`** → recent **`Message`** list (cap + TTL from **`conf.chat`**) |
-| `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints |
+| `dto.ChatConversationRequest` / `ChatConversationResponse` | JSON body/response for multi-turn endpoints (`role` supported in request) |
 | `vectorstore.LocalMongoVectorStore` | **`VectorStore`** implementation (local Mongo + cosine search) |
 | `config.VectorStoreConfig` | **`VectorStore`** bean |
 | `config.OpenApiConfig` | OpenAPI metadata for Swagger |
@@ -90,9 +90,9 @@ RAG retrieval now runs through **`HybridRetrievalService`**, which fuses vector 
 | Method & path | Body | Behavior |
 |---------------|------|----------|
 | `POST /ai-chat/chat` | Raw string (message) | Calls **`askAI`**: system prompt for SSRP + user message → **`ChatModel`** — **no** KB retrieval. |
-| `POST /ai-chat/chat/rag` | Raw string (message) | Calls **`askAIWithContext`**: embed query, retrieve similar KB docs, then **generate** with KB-only instructions. |
+| `POST /ai-chat/chat/rag` | Raw string (message), optional query param `role` (`customer` default, `officer` supported) | Calls **`askAIWithContext`**: embed query, retrieve role-scoped KB docs, then **generate** with role-aware grounded instructions. |
 | `POST /ai-chat/chat/conversation` | JSON `{"message":"…","conversationId":"…"}` — `conversationId` optional | Plain chat with **short-term history**: prior turns + current message. Response JSON: **`conversationId`**, **`reply`**. |
-| `POST /ai-chat/chat/rag/conversation` | Same JSON shape | RAG with history: retrieval uses a **combined query** when the latest message is short (e.g. “yes”) so it aligns with the **previous user** line; generation sees history + KB excerpts. |
+| `POST /ai-chat/chat/rag/conversation` | JSON `{"message":"…","conversationId":"…","role":"officer|customer"}` (`role` optional, defaults to `customer`) | RAG with history: retrieval uses a **combined query** when the latest message is short (e.g. “yes”) so it aligns with the **previous user** line; generation sees history + role-scoped KB excerpts. |
 
 All chat endpoints run through a **Security & Governance** check first. Requests that violate policy (empty payload, over-limit size, or blocked sensitive patterns) are rejected before retrieval/model execution. Responses are also post-checked for customer-id integrity to prevent ID drift (for example, `customer id 123` changing in generated output).
 
@@ -115,6 +115,9 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 3. **Hybrid retrieval** — **`HybridRetrievalService`** gets vector results from **`VectorStore.similaritySearch(SearchRequest)`**, adds MongoDB **`$text`** keyword-ranked candidates (text-score order on indexed KB fields), and fuses rankings.
 
+   - After retrieval, `LlmChatService` applies role-based document scoping (`customer` vs `officer`) using metadata/source/category conventions.
+   - For `officer` role, entity-intent fast path is applied for operational queries containing ship-number tokens (for example `J-10004`): first filter by ship number, then optionally by status intent keywords (`pending`, `completed`, `canceled/cancelled`) before normal rerank fallback.
+
 4. **Reranking** — **`RerankingService`** scores the retrieved candidate set against the user query and keeps top-k passages before final prompt composition.
 
 5. **No match** — If nothing passes the threshold (or KB has no embeddings), the flow matches the previous **unknown query** behavior:
@@ -123,7 +126,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
    - The user gets a fixed “not enough information” style message.
    - If enabled, **`UnknownQueryTrainingService`** periodically groups repeated unknown questions, generates a draft answer from KB excerpts, and stores it in **`kb_training_drafts`** for admin approval/import.
 
-6. **Grounded generation** — Retrieved excerpts are formatted by **`PromptBuilderService`** into a structured **`UserMessage`** with `[CONTEXT]`, `[QUESTION]`, and `[INSTRUCTIONS]`; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (KB-only rules). The reply comes from **`ChatResponse`**.
+6. **Grounded generation** — Retrieved excerpts are formatted by **`PromptBuilderService`** into a structured **`UserMessage`** with `[CONTEXT]`, `[ROLE]`, `[QUESTION]`, and `[INSTRUCTIONS]`; **`ChatModel`** is called with a dedicated **RAG `SystemMessage`** (customer/officer variants, both KB-only). The reply comes from **`ChatResponse`**.
 
 7. **Non-RAG chat** — `POST .../chat` skips retrieval and uses a shorter **SSRP assistant** system prompt only.
 
@@ -139,7 +142,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 
 ## Data model (MongoDB)
 
-- **`kb_documents`** — KB chunks for SSRP (vessel registration topics). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time). New rows are tagged with **`embeddingModel`** and **`embeddingVersion`** to guard against mixed embedding spaces.
+- **`kb_documents`** — KB chunks for SSRP (customer and officer role content). Seeded at startup if empty through **`vectorStore.add`** (embeddings computed at seed time). New rows are tagged with **`embeddingModel`** and **`embeddingVersion`** to guard against mixed embedding spaces. Officer chunks are distinguished by metadata conventions (`audienceRole=officer`, `source=officer-kb-json`, `category=OfficerJobSummary`) without changing the `KnowledgeDocument` schema.
 - **`unknown_queries`** — Optional log of user questions when RAG cannot find a confident match (best effort insert; failures are printed to stderr). Documents may include **`conversationId`** for requests from **`/chat/rag/conversation`**.
 - **`kb_training_drafts`** — Admin review queue populated by **`UnknownQueryTrainingService`**. Drafts are created from normalized/grouped entries in `unknown_queries`, then imported into `kb_documents` via admin approval endpoints under **`/admin/unknown-training/drafts/**`.
 
@@ -153,6 +156,7 @@ Swagger/OpenAPI UI is provided by springdoc (with the configured context path, e
 - **Security & governance** — **`conf.security.enabled`**, **`conf.security.max-input-chars`**, and **`conf.security.blocked-patterns`** enforce mandatory inbound policy checks before any LLM or RAG action.
 - **Hybrid retrieval tuning** — **`conf.rag.hybrid.enabled`**, **`conf.rag.hybrid.keyword-top-k`**, **`conf.rag.hybrid.vector-weight`**, **`conf.rag.hybrid.keyword-weight`** control vector+keyword fusion behavior.
 - **Reranking tuning** — **`conf.rag.rerank.enabled`** and **`conf.rag.rerank.top-k`** control LLM-based candidate reranking.
+- **KB JSON source toggles** — **`conf.kb.json-enabled`**, **`conf.kb.json-vessel-services-classpath`**, **`conf.kb.json-validations-classpath`**, **`conf.kb.json-officer-enabled`**, **`conf.kb.json-officer-classpath`** control startup seeding sources.
 - **Embedding consistency controls** — **`conf.kb.embedding-metadata.model-tag`** + **`conf.kb.embedding-metadata.version`** are stamped on new KB chunks; **`conf.kb.embedding-compatibility.strict`** controls whether mismatches are warn-only (`false`) or excluded from retrieval (`true`).
 - Top of **`application.yml`** maps **`spring.*`**, **`server.*`**, etc. from **`${conf.*}`** (not Keycloak/JPA/SQL Server—those are not in this project).
 - Maven **`@activatedProperties@`** substitutes the default **Spring** profile at build time (`pom.xml`: profiles `dev`, `onsite`, `prod`).
