@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LlmChatServiceRetrievalQueryTest {
@@ -37,5 +38,23 @@ class LlmChatServiceRetrievalQueryTest {
     @Test
     void greetingDetectorAcceptsSimpleGreeting() {
         assertTrue(LlmChatService.isGreetingOnly("Hello!"));
+    }
+
+    @Test
+    void officerCountIntentDetectedForReportQuestion() {
+        assertTrue(LlmChatService.isOfficerStatusCountIntent(
+                "I need report how many task completed and how many cancelled"));
+    }
+
+    @Test
+    void officerCountIntentRejectedForNonReportQuestion() {
+        assertFalse(LlmChatService.isOfficerStatusCountIntent(
+                "show me task details for job 123456"));
+    }
+
+    @Test
+    void taskStatusExtractionNormalizesCancelledSpelling() {
+        assertEquals("CANCELED", LlmChatService.extractTaskStatusFromContent(
+                "Officer case summary\nTask Status: Cancelled\nTask ID: 12"));
     }
 }
