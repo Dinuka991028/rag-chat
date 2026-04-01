@@ -192,30 +192,6 @@
       letter-spacing: 0.1em;
       color: var(--muted);
     }
-    .key-row {
-      display: flex;
-      gap: 0.4rem;
-      margin-bottom: 0.5rem;
-    }
-    .key-row input {
-      flex: 1;
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.75rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.45rem 0.5rem;
-      border-radius: 6px;
-    }
-    .key-row button {
-      font-size: 0.75rem;
-      background: var(--elev);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 6px;
-      cursor: pointer;
-      padding: 0 0.6rem;
-    }
     .tabs {
       display: flex;
       gap: 0.25rem;
@@ -334,10 +310,6 @@
     <aside class="ops">
       <div class="ops-head">
         <h2>Knowledge &amp; triage</h2>
-        <div class="key-row">
-          <input type="password" id="adminKey" placeholder="X-Admin-Key (if configured)" autocomplete="off" />
-          <button type="button" id="saveKey">Save</button>
-        </div>
         <div class="tabs" id="tabs">
           <button type="button" data-tab="unknown" class="on">Unknown</button>
           <button type="button" data-tab="drafts">Drafts</button>
@@ -387,26 +359,15 @@
   </div>
   <script>
     (function () {
-      const STORAGE_KEY = "ssrp-admin-key";
       const msgs = document.getElementById("msgs");
       const tin = document.getElementById("tin");
       const tgo = document.getElementById("tgo");
       let conversationId = null;
       let typingEl = null;
 
-      const adminKeyInput = document.getElementById("adminKey");
-      adminKeyInput.value = sessionStorage.getItem(STORAGE_KEY) || "";
-
-      document.getElementById("saveKey").addEventListener("click", function () {
-        sessionStorage.setItem(STORAGE_KEY, adminKeyInput.value.trim());
-        adminKeyInput.blur();
-      });
-
       function adminHeaders(json) {
         const h = {};
         if (json) h["Content-Type"] = "application/json";
-        const k = sessionStorage.getItem(STORAGE_KEY);
-        if (k) h["X-Admin-Key"] = k;
         return h;
       }
 
