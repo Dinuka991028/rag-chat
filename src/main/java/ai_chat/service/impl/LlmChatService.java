@@ -54,7 +54,7 @@ public class LlmChatService implements ChatService {
 
     /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
     private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
-    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b(?:BH|J)-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
     private static final Pattern GREETING_ONLY_PATTERN =
             Pattern.compile("^(hi|hello|hey|salam|salaam|good\\s*(morning|afternoon|evening))\\s*[!.?]*$",

@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
 public class HybridRetrievalService {
 
     private static final int RRF_K = 60;
-    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b(?:BH|J)-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
 
     private final VectorStore vectorStore;

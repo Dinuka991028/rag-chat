@@ -25,7 +25,7 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
             Pattern.compile("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b");
     private static final Pattern PHONE_PATTERN =
             Pattern.compile("\\b(?:\\+?\\d[\\d\\s-]{7,}\\d)\\b");
-    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b(?:BH|J)-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
     private static final Pattern ADDRESS_LINE_PATTERN =
             Pattern.compile("(?im)\\b(address|location|residence)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
