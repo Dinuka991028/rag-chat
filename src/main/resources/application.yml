@@ -151,6 +151,13 @@ conf:
       enabled: true
       # Number of passages kept after reranking and sent to final merger/prompt.
       top-k: 8
+    # Stricter lexical grounding before calling the LLM (customer path; officer entity IDs still use dedicated checks).
+    grounding:
+      # Only the first N chunks after retrieval/merge are checked for token overlap with the question.
+      top-docs-window: 3
+      # How many distinct question tokens must appear in that window (tokens: length ≥ token-min-len, not a stopword).
+      min-hits: 2
+      token-min-len: 3
   # RAG KB: curated FAQ snippets (code) + SRS. Prefer kb/ssrp-srs-llm.md (LLM-friendly) over PDF when present.
   kb:
     json-enabled: true

@@ -20,13 +20,16 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +45,12 @@ public class LlmChatService implements ChatService {
     /** Max curated FAQ passages to force into context before filling with SRS PDF chunks. */
     private static final int RAG_CURATED_CAP = 5;
     private static final int RAG_TOP_K = 8;
+    private static final Set<String> QUESTION_STOPWORDS = Set.of(
+            "the", "and", "for", "with", "from", "this", "that", "your", "you", "are", "can", "how",
+            "what", "when", "where", "why", "which", "who", "will", "shall", "should", "could", "would",
+            "into", "onto", "about", "have", "has", "had", "was", "were", "been", "also", "more", "than",
+            "then", "there", "here", "their", "them", "they", "our", "out", "all", "any", "not", "yes",
+            "no", "new", "old", "get", "got", "make", "made", "please", "help", "need", "want", "tell");
 
     /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
     private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
@@ -103,6 +112,15 @@ public class LlmChatService implements ChatService {
     @Autowired
     private OfficerPromptPrivacyService officerPromptPrivacyService;
 
+    @Value("${conf.rag.grounding.top-docs-window:3}")
+    private int ragGroundingTopDocsWindow;
+
+    @Value("${conf.rag.grounding.min-hits:2}")
+    private int ragGroundingMinHits;
+
+    @Value("${conf.rag.grounding.token-min-len:3}")
+    private int ragGroundingTokenMinLen;
+
     @Override
     public String askAI(String prompt) {
         SecurityGovernanceService.GovernanceDecision decision = securityGovernanceService.checkInboundRequest(prompt);
@@ -142,6 +160,11 @@ public class LlmChatService implements ChatService {
         if (found.isEmpty()) {
             logUnknownQuery(safePrompt, null, effectiveRole);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
+        }
+        if (!hasSufficientGrounding(found, safePrompt, effectiveRole, ragGroundingTopDocsWindow,
+                ragGroundingMinHits, ragGroundingTokenMinLen)) {
+            logUnknownQuery(safePrompt, null, effectiveRole);
+            return "Sorry, I don't have enough information to answer that right now.";
         }
         String reply = generateRagAnswer(found, safePrompt, List.of(), effectiveRole);
         reply = applyOutboundGovernance(safePrompt, reply);
@@ -213,6 +236,10 @@ public class LlmChatService implements ChatService {
             logUnknownQuery(safeMessage, id, effectiveRole);
             reply =
                     "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
+        } else if (!hasSufficientGrounding(found, safeMessage, effectiveRole, ragGroundingTopDocsWindow,
+                ragGroundingMinHits, ragGroundingTokenMinLen)) {
+            logUnknownQuery(safeMessage, id, effectiveRole);
+            reply = "Sorry, I don't have enough information to answer that right now.";
         } else {
             reply = generateRagAnswer(found, safeMessage, history, effectiveRole);
             reply = applyOutboundGovernance(safeMessage, reply);
@@ -534,6 +561,80 @@ public class LlmChatService implements ChatService {
             out.add(d);
         }
         return out;
+    }
+
+    /**
+     * Lightweight grounding check to avoid answering from loosely related chunks.
+     * Officer role with job/ship identifiers uses entity matching; otherwise uses top-N lexical overlap (configurable).
+     */
+    private static boolean hasSufficientGrounding(List<Document> docs, String question, String role,
+            int topDocsWindow, int minHits, int tokenMinLen) {
+        if (docs == null || docs.isEmpty() || question == null || question.isBlank()) {
+            return false;
+        }
+        String effectiveRole = normalizeRole(role);
+        String q = question.toLowerCase(Locale.ROOT);
+        if ("officer".equals(effectiveRole)) {
+            String jobId = extractJobId(question);
+            if (jobId != null && !jobId.isBlank()) {
+                return containsInAnyDoc(docs, "Job ID: " + jobId) || containsInAnyDoc(docs, jobId);
+            }
+            String ship = extractShipNumber(question);
+            if (ship != null && !ship.isBlank()) {
+                return containsInAnyDoc(docs, "Ship Number: " + ship) || containsInAnyDoc(docs, ship);
+            }
+        }
+
+        int window = Math.max(1, topDocsWindow);
+        int requiredHits = Math.max(1, minHits);
+        int minTokenLen = Math.max(2, tokenMinLen);
+        Set<String> tokens = extractQuestionTokens(q, minTokenLen);
+        if (tokens.isEmpty()) {
+            return true;
+        }
+        List<Document> topDocs = cap(docs, window);
+        int hits = 0;
+        for (String token : tokens) {
+            if (containsInAnyDoc(topDocs, token)) {
+                hits++;
+                if (hits >= requiredHits) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> extractQuestionTokens(String text, int minLen) {
+        Set<String> out = new HashSet<>();
+        if (text == null || text.isBlank()) {
+            return out;
+        }
+        String[] raw = text.split("[^a-z0-9]+");
+        for (String t : raw) {
+            if (t == null || t.length() < minLen) {
+                continue;
+            }
+            if (QUESTION_STOPWORDS.contains(t)) {
+                continue;
+            }
+            out.add(t);
+        }
+        return out;
+    }
+
+    private static boolean containsInAnyDoc(List<Document> docs, String needleRaw) {
+        if (needleRaw == null || needleRaw.isBlank()) {
+            return false;
+        }
+        String needle = needleRaw.toLowerCase(Locale.ROOT);
+        for (Document d : docs) {
+            String text = d.getText();
+            if (text != null && text.toLowerCase(Locale.ROOT).contains(needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }
