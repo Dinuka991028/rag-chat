@@ -2,6 +2,7 @@ package ai_chat.service;
 
 import ai_chat.domain.KnowledgeDocument;
 import ai_chat.domain.OfficerKnowledgeDocument;
+import ai_chat.vectorstore.LocalMongoVectorStore;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -33,6 +34,7 @@ public class HybridRetrievalService {
 
     private static final int RRF_K = 60;
     private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
 
     private final VectorStore vectorStore;
     private final MongoTemplate mongoTemplate;
@@ -65,12 +67,14 @@ public class HybridRetrievalService {
         int effectiveVectorTopK = "officer".equals(normalizeRole(role))
                 ? Math.max(vectorTopK * 4, vectorTopK + 20)
                 : vectorTopK;
-        List<Document> vector = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(query)
-                        .topK(effectiveVectorTopK)
-                        .similarityThreshold(similarityThreshold)
-                        .build());
+        SearchRequest vectorRequest = SearchRequest.builder()
+                .query(query)
+                .topK(effectiveVectorTopK)
+                .similarityThreshold(similarityThreshold)
+                .build();
+        List<Document> vector = vectorStore instanceof LocalMongoVectorStore localMongoVectorStore
+                ? localMongoVectorStore.similaritySearch(vectorRequest, role)
+                : vectorStore.similaritySearch(vectorRequest);
         List<Document> scopedVector = filterByRole(vector, role);
         if (!hybridEnabled || query == null || query.isBlank()) {
             return cap(scopedVector, vectorTopK);
@@ -89,7 +93,7 @@ public class HybridRetrievalService {
         if (shipNumber != null) {
             Query shipQuery = new Query();
             shipQuery.addCriteria(Criteria.where("content").regex("\\b" + Pattern.quote(shipNumber) + "\\b", "i"));
-            Criteria roleCriteria = officerRoleCriteria(role);
+            Criteria roleCriteria = roleCriteria(role);
             if (roleCriteria != null) {
                 shipQuery.addCriteria(roleCriteria);
             }
@@ -102,13 +106,29 @@ public class HybridRetrievalService {
                 out.addAll(byShip.stream().map(HybridRetrievalService::toSpringDocument).toList());
             }
         }
+        String jobId = extractJobId(query);
+        if (jobId != null && "officer".equals(normalizeRole(role))) {
+            Query jobQuery = new Query();
+            jobQuery.addCriteria(Criteria.where("content").regex("\\bJob\\s+ID\\s*:\\s*" + Pattern.quote(jobId) + "\\b", "i"));
+            Criteria roleCriteria = roleCriteria(role);
+            if (roleCriteria != null) {
+                jobQuery.addCriteria(roleCriteria);
+            }
+            jobQuery.limit(topK);
+            List<OfficerKnowledgeDocument> byJob = mongoTemplate.find(jobQuery, OfficerKnowledgeDocument.class);
+            for (Document d : byJob.stream().map(HybridRetrievalService::toSpringDocument).toList()) {
+                if (!containsDocId(out, d.getId())) {
+                    out.add(d);
+                }
+            }
+        }
         TextCriteria criteria = TextCriteria.forDefaultLanguage().matching(query);
         Query textQuery = TextQuery.queryText(criteria)
                 .sortByScore()
                 .includeScore()
                 .with(Sort.by(Sort.Direction.DESC, "score"))
                 .limit(topK);
-        Criteria roleCriteria = officerRoleCriteria(role);
+        Criteria roleCriteria = roleCriteria(role);
         if (roleCriteria != null) {
             textQuery.addCriteria(roleCriteria);
         }
@@ -164,9 +184,6 @@ public class HybridRetrievalService {
             return List.of();
         }
         String normalizedRole = normalizeRole(role);
-        if (!"officer".equals(normalizedRole)) {
-            return docs;
-        }
         List<Document> out = new ArrayList<>(docs.size());
         for (Document d : docs) {
             Map<String, Object> m = d.getMetadata();
@@ -176,18 +193,23 @@ public class HybridRetrievalService {
             boolean officerDoc = "officer".equalsIgnoreCase(audienceRole)
                     || "OfficerJobSummary".equalsIgnoreCase(category)
                     || source.startsWith("officer-");
-            if (officerDoc) {
+            if ("officer".equals(normalizedRole) && officerDoc) {
+                out.add(d);
+            } else if (!"officer".equals(normalizedRole) && !officerDoc) {
                 out.add(d);
             }
         }
         return out;
     }
 
-    private static Criteria officerRoleCriteria(String role) {
-        if (!"officer".equals(normalizeRole(role))) {
-            return null;
+    private static Criteria roleCriteria(String role) {
+        if ("officer".equals(normalizeRole(role))) {
+            return new Criteria().orOperator(
+                    Criteria.where("audienceRole").is("officer"),
+                    Criteria.where("category").is("OfficerJobSummary"),
+                    Criteria.where("source").regex("^officer-", "i"));
         }
-        return new Criteria().orOperator(
+        return new Criteria().norOperator(
                 Criteria.where("audienceRole").is("officer"),
                 Criteria.where("category").is("OfficerJobSummary"),
                 Criteria.where("source").regex("^officer-", "i"));
@@ -210,6 +232,17 @@ public class HybridRetrievalService {
             return null;
         }
         return m.group().toUpperCase(Locale.ROOT);
+    }
+
+    private static String extractJobId(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        Matcher m = JOB_ID_PATTERN.matcher(query);
+        if (!m.find()) {
+            return null;
+        }
+        return m.group();
     }
 
     private static boolean containsDocId(List<Document> docs, String id) {

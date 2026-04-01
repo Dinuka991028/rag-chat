@@ -45,6 +45,7 @@ public class LlmChatService implements ChatService {
     /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
     private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
     private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
     private static final Pattern GREETING_ONLY_PATTERN =
             Pattern.compile("^(hi|hello|hey|salam|salaam|good\\s*(morning|afternoon|evening))\\s*[!.?]*$",
                     Pattern.CASE_INSENSITIVE);
@@ -399,6 +400,16 @@ public class LlmChatService implements ChatService {
         if (docs == null || docs.isEmpty() || query == null || query.isBlank()) {
             return List.of();
         }
+        String jobId = extractJobId(query);
+        if (jobId != null && !jobId.isBlank()) {
+            List<Document> byJob = filterByContains(docs, "Job ID: " + jobId);
+            if (byJob.isEmpty()) {
+                byJob = filterByContains(docs, jobId);
+            }
+            if (!byJob.isEmpty()) {
+                return byJob;
+            }
+        }
         String shipNumber = extractShipNumber(query);
         if (shipNumber == null || shipNumber.isBlank()) {
             return List.of();
@@ -428,6 +439,14 @@ public class LlmChatService implements ChatService {
             return null;
         }
         return m.group().toUpperCase(Locale.ROOT);
+    }
+
+    private static String extractJobId(String query) {
+        Matcher m = JOB_ID_PATTERN.matcher(query);
+        if (!m.find()) {
+            return null;
+        }
+        return m.group();
     }
 
     private static String extractStatusIntent(String query) {

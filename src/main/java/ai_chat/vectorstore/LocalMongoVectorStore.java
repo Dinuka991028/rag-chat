@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 /**
  * Spring AI {@link VectorStore} backed by self-hosted MongoDB ({@link KnowledgeDocument} rows).
@@ -113,6 +114,11 @@ public class LocalMongoVectorStore implements VectorStore {
     @Nullable
     @Override
     public List<Document> similaritySearch(SearchRequest request) {
+        return similaritySearch(request, null);
+    }
+
+    @Nullable
+    public List<Document> similaritySearch(SearchRequest request, String role) {
         if (request.hasFilterExpression()) {
             throw new UnsupportedOperationException(
                     "Metadata filter expressions are not supported by LocalMongoVectorStore yet");
@@ -125,36 +131,22 @@ public class LocalMongoVectorStore implements VectorStore {
         float[] queryVector = embeddingModel.embed(query);
         List<Float> queryFloats = toFloatList(queryVector);
 
-        List<KnowledgeDocument> customerDocs = knowledgeDocumentRepository.findAll();
-        List<OfficerKnowledgeDocument> officerDocs = officerKnowledgeDocumentRepository.findAll();
         List<Scored> scored = new ArrayList<>();
-        for (KnowledgeDocument kd : customerDocs) {
-            if (!isEmbeddingCompatible(kd)) {
-                continue;
+        String normalizedRole = normalizeRole(role);
+        if ("officer".equals(normalizedRole)) {
+            List<OfficerKnowledgeDocument> officerDocs = officerKnowledgeDocumentRepository.findAll();
+            log.debug("Vector search role={} collection=kb_documents_officer rawCandidates={}",
+                    normalizedRole, officerDocs.size());
+            for (OfficerKnowledgeDocument kd : officerDocs) {
+                addScoredOfficer(scored, kd, queryFloats);
             }
-            List<Float> emb = kd.getEmbedding();
-            if (emb == null || emb.isEmpty()) {
-                continue;
+        } else {
+            List<KnowledgeDocument> customerDocs = knowledgeDocumentRepository.findAll();
+            log.debug("Vector search role={} collection=kb_documents rawCandidates={}",
+                    normalizedRole, customerDocs.size());
+            for (KnowledgeDocument kd : customerDocs) {
+                addScoredCustomer(scored, kd, queryFloats);
             }
-            if (emb.size() != queryFloats.size()) {
-                continue;
-            }
-            double sim = cosineSimilarity(queryFloats, emb);
-            scored.add(new Scored(sim, toSpringDocument(kd)));
-        }
-        for (OfficerKnowledgeDocument kd : officerDocs) {
-            if (!isEmbeddingCompatible(kd)) {
-                continue;
-            }
-            List<Float> emb = kd.getEmbedding();
-            if (emb == null || emb.isEmpty()) {
-                continue;
-            }
-            if (emb.size() != queryFloats.size()) {
-                continue;
-            }
-            double sim = cosineSimilarity(queryFloats, emb);
-            scored.add(new Scored(sim, toSpringDocument(kd)));
         }
 
         scored.sort(Comparator.comparingDouble((Scored s) -> s.score).reversed());
@@ -173,6 +165,8 @@ public class LocalMongoVectorStore implements VectorStore {
                 break;
             }
         }
+        log.debug("Vector search role={} scoredCandidates={} topK={} returned={} threshold={}",
+                normalizedRole, scored.size(), topK, out.size(), threshold);
         return out;
     }
 
@@ -311,6 +305,14 @@ public class LocalMongoVectorStore implements VectorStore {
         return s == null ? "" : s.trim();
     }
 
+    private static String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "customer";
+        }
+        String r = role.trim().toLowerCase(Locale.ROOT);
+        return "officer".equals(r) ? "officer" : "customer";
+    }
+
     private static String safe(String s) {
         return s == null || s.isBlank() ? "-" : s;
     }
@@ -334,6 +336,30 @@ public class LocalMongoVectorStore implements VectorStore {
             list.add(v);
         }
         return list;
+    }
+
+    private void addScoredCustomer(List<Scored> scored, KnowledgeDocument kd, List<Float> queryFloats) {
+        if (!isEmbeddingCompatible(kd)) {
+            return;
+        }
+        List<Float> emb = kd.getEmbedding();
+        if (emb == null || emb.isEmpty() || emb.size() != queryFloats.size()) {
+            return;
+        }
+        double sim = cosineSimilarity(queryFloats, emb);
+        scored.add(new Scored(sim, toSpringDocument(kd)));
+    }
+
+    private void addScoredOfficer(List<Scored> scored, OfficerKnowledgeDocument kd, List<Float> queryFloats) {
+        if (!isEmbeddingCompatible(kd)) {
+            return;
+        }
+        List<Float> emb = kd.getEmbedding();
+        if (emb == null || emb.isEmpty() || emb.size() != queryFloats.size()) {
+            return;
+        }
+        double sim = cosineSimilarity(queryFloats, emb);
+        scored.add(new Scored(sim, toSpringDocument(kd)));
     }
 
     private record Scored(double score, Document doc) {
