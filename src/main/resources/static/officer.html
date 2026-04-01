@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SSRP — Officer workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --panel: #161a20;
+      --elev: #1e242d;
+      --border: #2c3440;
+      --text: #e6eaef;
+      --muted: #8b95a5;
+      --green: #3ecf8e;
+      --amber: #e5a54b;
+      --red: #f07178;
+      --blue: #5c9cf5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr min(420px, 38vw);
+      min-height: 100vh;
+    }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    .chat-col {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+    @media (max-width: 960px) {
+      .chat-col { border-right: none; border-bottom: 1px solid var(--border); min-height: 55vh; }
+    }
+    .chat-head {
+      padding: 0.9rem 1.1rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .chat-head h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .chat-head .tag {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.68rem;
+      color: var(--amber);
+      border: 1px solid var(--border);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+    .chat-head a { color: var(--blue); font-size: 0.88rem; }
+    .msgs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .m {
+      max-width: 90%;
+      padding: 0.7rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .m.u { align-self: flex-end; background: var(--elev); border: 1px solid var(--border); }
+    .m.a { align-self: flex-start; background: #12151a; border-left: 3px solid var(--blue); }
+    .m.s { align-self: center; color: var(--muted); font-size: 0.82rem; }
+    .m.e { align-self: center; background: rgba(240, 113, 120, 0.12); color: var(--red); border: 1px solid rgba(240, 113, 120, 0.35); }
+    .compose {
+      padding: 0.85rem 1rem 1rem;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 0.5rem;
+    }
+    .compose textarea {
+      flex: 1;
+      min-height: 48px;
+      max-height: 140px;
+      resize: none;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.6rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .compose textarea:focus {
+      outline: 2px solid var(--blue);
+      outline-offset: 0;
+    }
+    .compose button {
+      align-self: flex-end;
+      background: var(--blue);
+      color: #0d0f12;
+      border: none;
+      font-weight: 600;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .compose button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .ops {
+      background: var(--panel);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .ops-head {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      z-index: 1;
+    }
+    .ops-head h2 {
+      margin: 0 0 0.6rem;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+    .key-row {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.5rem;
+    }
+    .key-row input {
+      flex: 1;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.5rem;
+      border-radius: 6px;
+    }
+    .key-row button {
+      font-size: 0.75rem;
+      background: var(--elev);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0 0.6rem;
+    }
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .tabs button {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.35rem 0.55rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .tabs button.on {
+      color: var(--text);
+      border-color: var(--blue);
+      background: rgba(92, 156, 245, 0.1);
+    }
+    .panel-body {
+      padding: 0.75rem 1rem 1.25rem;
+      flex: 1;
+    }
+    .hidden { display: none !important; }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .card {
+      background: var(--elev);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.65rem;
+      font-size: 0.82rem;
+    }
+    .card .q { color: var(--text); margin-bottom: 0.35rem; }
+    .card .meta { font-family: "JetBrains Mono", monospace; font-size: 0.65rem; color: var(--muted); }
+    .card .actions { margin-top: 0.45rem; display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .card .actions button {
+      font-size: 0.7rem;
+      padding: 0.25rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .card .actions button.danger { border-color: rgba(240, 113, 120, 0.5); color: var(--red); }
+    .card .actions button.ok { border-color: rgba(62, 207, 142, 0.5); color: var(--green); }
+    form.stack label {
+      display: block;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0.5rem 0 0.2rem;
+    }
+    form.stack input, form.stack textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.45rem 0.5rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+    form.stack textarea { min-height: 100px; resize: vertical; }
+    form.stack button[type="submit"] {
+      margin-top: 0.65rem;
+      background: var(--green);
+      color: #0d0f12;
+      border: none;
+      font-weight: 600;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .status {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    .draft-ans {
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      max-height: 4.5em;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="chat-col">
+      <div class="chat-head">
+        <div>
+          <h1>Officer assistant</h1>
+          <span class="tag">role: officer · officer KB slice</span>
+        </div>
+        <a href="index.html">Demo home</a>
+      </div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="compose">
+        <textarea id="tin" rows="2" placeholder="Internal question (procedures, officer-only sources)…"></textarea>
+        <button type="button" id="tgo">Send</button>
+      </div>
+    </div>
+    <aside class="ops">
+      <div class="ops-head">
+        <h2>Knowledge &amp; triage</h2>
+        <div class="key-row">
+          <input type="password" id="adminKey" placeholder="X-Admin-Key (if configured)" autocomplete="off" />
+          <button type="button" id="saveKey">Save</button>
+        </div>
+        <div class="tabs" id="tabs">
+          <button type="button" data-tab="unknown" class="on">Unknown</button>
+          <button type="button" data-tab="drafts">Drafts</button>
+          <button type="button" data-tab="add">Add text</button>
+          <button type="button" data-tab="pdf">Import PDF</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="tab-unknown">
+          <button type="button" id="loadUnknown" style="margin-bottom:0.5rem;font-size:0.8rem;padding:0.35rem 0.6rem;border-radius:6px;border:1px solid var(--border);background:var(--elev);color:var(--text);cursor:pointer;">Refresh list</button>
+          <div class="list" id="unknownList"></div>
+          <p class="status" id="unknownStatus"></p>
+        </div>
+        <div id="tab-drafts" class="hidden">
+          <button type="button" id="loadDrafts" style="margin-bottom:0.5rem;font-size:0.8rem;padding:0.35rem 0.6rem;border-radius:6px;border:1px solid var(--border);background:var(--elev);color:var(--text);cursor:pointer;">Refresh drafts</button>
+          <div class="list" id="draftsList"></div>
+          <p class="status" id="draftsStatus"></p>
+        </div>
+        <div id="tab-add" class="hidden">
+          <form class="stack" id="addForm">
+            <label>Title</label>
+            <input name="title" placeholder="Short title / question line" />
+            <label>Category</label>
+            <input name="category" placeholder="e.g. Policy" />
+            <label>Source</label>
+            <input name="source" placeholder="e.g. manual-entry" />
+            <label>Content</label>
+            <textarea name="content" placeholder="Answer or article body"></textarea>
+            <button type="submit">Add to knowledge base</button>
+          </form>
+          <p class="status" id="addStatus"></p>
+        </div>
+        <div id="tab-pdf" class="hidden">
+          <form class="stack" id="pdfForm">
+            <label>PDF file</label>
+            <input type="file" name="file" accept=".pdf,application/pdf" required />
+            <label>Category (optional)</label>
+            <input name="category" placeholder="e.g. Circular" />
+            <label>Source prefix (optional)</label>
+            <input name="sourcePrefix" placeholder="e.g. import-" />
+            <button type="submit">Import &amp; embed</button>
+          </form>
+          <p class="status" id="pdfStatus"></p>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <script>
+    (function () {
+      const STORAGE_KEY = "ssrp-admin-key";
+      const msgs = document.getElementById("msgs");
+      const tin = document.getElementById("tin");
+      const tgo = document.getElementById("tgo");
+      let conversationId = null;
+
+      const adminKeyInput = document.getElementById("adminKey");
+      adminKeyInput.value = sessionStorage.getItem(STORAGE_KEY) || "";
+
+      document.getElementById("saveKey").addEventListener("click", function () {
+        sessionStorage.setItem(STORAGE_KEY, adminKeyInput.value.trim());
+        adminKeyInput.blur();
+      });
+
+      function adminHeaders(json) {
+        const h = {};
+        if (json) h["Content-Type"] = "application/json";
+        const k = sessionStorage.getItem(STORAGE_KEY);
+        if (k) h["X-Admin-Key"] = k;
+        return h;
+      }
+
+      function addMsg(cls, text) {
+        const d = document.createElement("div");
+        d.className = "m " + cls;
+        d.textContent = text;
+        msgs.appendChild(d);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+
+      addMsg("s", "Internal RAG: questions use officer-scoped KB passages.");
+
+      async function sendChat() {
+        const text = tin.value.trim();
+        if (!text) return;
+        tin.value = "";
+        addMsg("u", text);
+        tgo.disabled = true;
+        try {
+          const res = await fetch("chat/rag/conversation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: text,
+              conversationId: conversationId,
+              role: "officer",
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text() || res.statusText);
+          const data = await res.json();
+          if (data.conversationId) conversationId = data.conversationId;
+          addMsg("a", data.reply || "(empty)");
+        } catch (e) {
+          addMsg("e", e.message || String(e));
+        } finally {
+          tgo.disabled = false;
+          tin.focus();
+        }
+      }
+
+      tgo.addEventListener("click", sendChat);
+      tin.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) {
+          ev.preventDefault();
+          sendChat();
+        }
+      });
+
+      /* Tabs */
+      const tabIds = { unknown: "tab-unknown", drafts: "tab-drafts", add: "tab-add", pdf: "tab-pdf" };
+      document.querySelectorAll(".tabs button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
+          btn.classList.add("on");
+          Object.keys(tabIds).forEach(function (k) {
+            document.getElementById(tabIds[k]).classList.toggle("hidden", btn.dataset.tab !== k);
+          });
+        });
+      });
+
+      const unknownList = document.getElementById("unknownList");
+      const unknownStatus = document.getElementById("unknownStatus");
+
+      async function loadUnknown() {
+        unknownStatus.textContent = "Loading…";
+        unknownList.innerHTML = "";
+        try {
+          const res = await fetch("admin/unknown-queries?page=0&size=50", { headers: adminHeaders(false) });
+          if (res.status === 404) {
+            unknownStatus.textContent = "Admin API disabled (conf.admin.enabled=false).";
+            return;
+          }
+          if (res.status === 401) {
+            unknownStatus.textContent = "Unauthorized — set X-Admin-Key to match ADMIN_API_KEY.";
+            return;
+          }
+          if (!res.ok) throw new Error(await res.text());
+          const page = await res.json();
+          const items = page.content || [];
+          unknownStatus.textContent = items.length ? items.length + " item(s)" : "No unknown queries.";
+          items.forEach(function (row) {
+            const c = document.createElement("div");
+            c.className = "card";
+            c.innerHTML =
+              '<div class="q"></div><div class="meta"></div><div class="actions">' +
+              '<button type="button" class="del">Dismiss</button></div>';
+            c.querySelector(".q").textContent = row.question || "(no text)";
+            c.querySelector(".meta").textContent = (row.id || "") + (row.createdAt ? " · " + row.createdAt : "");
+            c.querySelector(".del").addEventListener("click", async function () {
+              if (!confirm("Remove this unknown query?")) return;
+              const dr = await fetch("admin/unknown-queries/" + encodeURIComponent(row.id), {
+                method: "DELETE",
+                headers: adminHeaders(false),
+              });
+              if (!dr.ok) {
+                alert(await dr.text());
+                return;
+              }
+              c.remove();
+            });
+            unknownList.appendChild(c);
+          });
+        } catch (e) {
+          unknownStatus.textContent = "Error: " + (e.message || e);
+        }
+      }
+
+      document.getElementById("loadUnknown").addEventListener("click", loadUnknown);
+
+      const draftsList = document.getElementById("draftsList");
+      const draftsStatus = document.getElementById("draftsStatus");
+
+      async function loadDrafts() {
+        draftsStatus.textContent = "Loading…";
+        draftsList.innerHTML = "";
+        try {
+          const res = await fetch("admin/unknown-training/drafts/pending?page=0&size=50", { headers: adminHeaders(false) });
+          if (res.status === 404) {
+            draftsStatus.textContent = "Admin API disabled.";
+            return;
+          }
+          if (res.status === 401) {
+            draftsStatus.textContent = "Unauthorized — set X-Admin-Key.";
+            return;
+          }
+          if (!res.ok) throw new Error(await res.text());
+          const page = await res.json();
+          const items = page.content || [];
+          draftsStatus.textContent = items.length ? items.length + " pending" : "No pending drafts.";
+          items.forEach(function (row) {
+            const c = document.createElement("div");
+            c.className = "card";
+            const ans = (row.proposedAnswer || "").slice(0, 220);
+            c.innerHTML =
+              '<div class="q"></div><div class="draft-ans"></div><div class="meta"></div><div class="actions">' +
+              '<button type="button" class="ok">Approve / import</button>' +
+              '<button type="button" class="danger">Reject</button></div>';
+            c.querySelector(".q").textContent = row.question || row.normalizedQuestion || "(draft)";
+            c.querySelector(".draft-ans").textContent = ans + (row.proposedAnswer && row.proposedAnswer.length > 220 ? "…" : "");
+            c.querySelector(".meta").textContent = row.id || "";
+            c.querySelector(".ok").addEventListener("click", async function () {
+              const r = await fetch("admin/unknown-training/drafts/" + encodeURIComponent(row.id) + "/approve", {
+                method: "POST",
+                headers: adminHeaders(false),
+              });
+              if (!r.ok) {
+                alert(await r.text());
+                return;
+              }
+              c.remove();
+            });
+            c.querySelector(".danger").addEventListener("click", async function () {
+              const r = await fetch("admin/unknown-training/drafts/" + encodeURIComponent(row.id) + "/reject", {
+                method: "POST",
+                headers: adminHeaders(false),
+              });
+              if (!r.ok) {
+                alert(await r.text());
+                return;
+              }
+              c.remove();
+            });
+            draftsList.appendChild(c);
+          });
+        } catch (e) {
+          draftsStatus.textContent = "Error: " + (e.message || e);
+        }
+      }
+
+      document.getElementById("loadDrafts").addEventListener("click", loadDrafts);
+
+      document.getElementById("addForm").addEventListener("submit", async function (ev) {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const body = {
+          title: (fd.get("title") || "").toString().trim(),
+          category: (fd.get("category") || "").toString().trim(),
+          source: (fd.get("source") || "").toString().trim(),
+          content: (fd.get("content") || "").toString().trim(),
+        };
+        const st = document.getElementById("addStatus");
+        st.textContent = "Submitting…";
+        try {
+          const res = await fetch("admin/knowledge", {
+            method: "POST",
+            headers: adminHeaders(true),
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          st.textContent = "OK — total KB docs: " + (data.totalKbDocuments != null ? data.totalKbDocuments : JSON.stringify(data));
+          ev.target.reset();
+        } catch (e) {
+          st.textContent = "Error: " + (e.message || e);
+        }
+      });
+
+      document.getElementById("pdfForm").addEventListener("submit", async function (ev) {
+        ev.preventDefault();
+        const fd = new FormData();
+        const fileInput = ev.target.querySelector('input[type="file"]');
+        if (!fileInput.files[0]) return;
+        fd.append("file", fileInput.files[0]);
+        const cat = ev.target.querySelector('[name="category"]').value.trim();
+        const pref = ev.target.querySelector('[name="sourcePrefix"]').value.trim();
+        if (cat) fd.append("category", cat);
+        if (pref) fd.append("sourcePrefix", pref);
+        const st = document.getElementById("pdfStatus");
+        st.textContent = "Uploading…";
+        try {
+          const res = await fetch("admin/knowledge/import-pdf", {
+            method: "POST",
+            headers: adminHeaders(false),
+            body: fd,
+          });
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          st.textContent = "Imported chunks: " + (data.chunksAdded != null ? data.chunksAdded : "") + " · total docs: " + (data.totalKbDocuments != null ? data.totalKbDocuments : "");
+          ev.target.reset();
+        } catch (e) {
+          st.textContent = "Error: " + (e.message || e);
+        }
+      });
+
+      loadUnknown();
+    })();
+  </script>
+</body>
+</html>

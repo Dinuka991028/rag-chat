@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SSRP Assist — Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c1118;
+      --card: #151d28;
+      --line: #2a3544;
+      --text: #e8edf4;
+      --muted: #8b9cb0;
+      --accent: #3d9cf0;
+      --accent2: #c9a227;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 120% 80% at 20% 0%, rgba(61, 156, 240, 0.12), transparent 50%),
+        radial-gradient(ellipse 80% 60% at 100% 100%, rgba(201, 162, 39, 0.08), transparent 45%),
+        var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    h1 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-weight: 400;
+      font-size: clamp(2.2rem, 5vw, 3.25rem);
+      margin: 0 0 0.35em;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      max-width: 32rem;
+      text-align: center;
+      line-height: 1.55;
+      margin-bottom: 2.5rem;
+      font-size: 1.05rem;
+    }
+    .grid {
+      display: grid;
+      gap: 1.25rem;
+      width: min(52rem, 100%);
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    a.card {
+      display: block;
+      padding: 1.75rem 1.5rem;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    a.card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    }
+    a.card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    a.card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    a.card.customer { border-left: 4px solid var(--accent); }
+    a.card.officer { border-left: 4px solid var(--accent2); }
+    footer {
+      margin-top: 3rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    code { font-size: 0.9em; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Small Ship Registry Portal</h1>
+  <p class="sub">Choose a demo surface: public self-service chat for applicants, or the internal officer workspace with knowledge triage.</p>
+  <div class="grid">
+    <a class="card customer" href="customer.html">
+      <h2>Customer</h2>
+      <p>RAG assistant tuned for applicants and the public knowledge scope.</p>
+    </a>
+    <a class="card officer" href="officer.html">
+      <h2>Officer</h2>
+      <p>Internal assistant plus admin tools: unknown questions, drafts, KB add / PDF import.</p>
+    </a>
+  </div>
+  <footer>Run the app and open <code>/ai-chat/</code> (see <code>conf.server.context-path</code>).</footer>
+</body>
+</html>
