@@ -10,6 +10,7 @@ import ai_chat.service.HybridRetrievalService;
 import ai_chat.service.PromptBuilderService;
 import ai_chat.service.RerankingService;
 import ai_chat.service.SecurityGovernanceService;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -26,6 +27,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,6 +51,17 @@ public class LlmChatService implements ChatService {
     private static final Pattern GREETING_ONLY_PATTERN =
             Pattern.compile("^(hi|hello|hey|salam|salaam|good\\s*(morning|afternoon|evening))\\s*[!.?]*$",
                     Pattern.CASE_INSENSITIVE);
+    private static final Pattern SENSITIVE_LABELED_VALUE_PATTERN =
+            Pattern.compile(
+                    "(?im)\\b(customer\\s*id|customer\\s*name|full\\s*name|name|email|e-?mail|phone|mobile|contact\\s*number|national\\s*id|id\\s*number|passport\\s*number|ship\\s*number|job\\s*id|application\\s*id|address|home\\s*address|mailing\\s*address)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b");
+    private static final Pattern PHONE_PATTERN =
+            Pattern.compile("\\b(?:\\+?\\d[\\d\\s-]{7,}\\d)\\b");
+    private static final Pattern ADDRESS_LINE_PATTERN =
+            Pattern.compile("(?im)\\b(address|location|residence)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
+    private static final Pattern FULL_NAME_LINE_PATTERN =
+            Pattern.compile("(?im)\\b(customer\\s*name|full\\s*name|applicant\\s*name|owner\\s*name|name)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
 
     private static final String SYSTEM_PLAIN =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
@@ -135,13 +148,13 @@ public class LlmChatService implements ChatService {
         }
         List<Document> found = retrieveMerged(safePrompt, effectiveRole);
         if (found.isEmpty()) {
-            logUnknownQuery(safePrompt, null);
+            logUnknownQuery(safePrompt, null, effectiveRole);
             return "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         }
         String reply = generateRagAnswer(found, safePrompt, List.of(), effectiveRole);
         reply = applyOutboundGovernance(safePrompt, reply);
         if (isRagInsufficientReply(reply)) {
-            logUnknownQuery(safePrompt, null);
+            logUnknownQuery(safePrompt, null, effectiveRole);
         }
         return reply;
     }
@@ -205,14 +218,14 @@ public class LlmChatService implements ChatService {
         List<Document> found = retrieveMerged(retrievalQuery, effectiveRole);
         String reply;
         if (found.isEmpty()) {
-            logUnknownQuery(safeMessage, id);
+            logUnknownQuery(safeMessage, id, effectiveRole);
             reply =
                     "Sorry, I don’t have enough information to answer that right now. Please contact support or try another question.";
         } else {
             reply = generateRagAnswer(found, safeMessage, history, effectiveRole);
             reply = applyOutboundGovernance(safeMessage, reply);
             if (isRagInsufficientReply(reply)) {
-                logUnknownQuery(safeMessage, id);
+                logUnknownQuery(safeMessage, id, effectiveRole);
             }
         }
         conversationHistoryService.append(id, safeMessage, reply);
@@ -237,11 +250,19 @@ public class LlmChatService implements ChatService {
 
     private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent, String role) {
         String userPayload = promptBuilderService.buildRagPayload(found, customerQuestion, role);
-        String systemPrompt = "officer".equals(normalizeRole(role)) ? SYSTEM_RAG_OFFICER : SYSTEM_RAG;
+        String effectiveRole = normalizeRole(role);
+        if ("officer".equals(effectiveRole)) {
+            userPayload = sanitizeOfficerTextForLlm(userPayload);
+        }
+        String systemPrompt = "officer".equals(effectiveRole) ? SYSTEM_RAG_OFFICER : SYSTEM_RAG;
         try {
             List<Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(systemPrompt));
-            messages.addAll(historyBeforeCurrent);
+            if ("officer".equals(effectiveRole)) {
+                messages.addAll(sanitizeOfficerHistoryForLlm(historyBeforeCurrent));
+            } else {
+                messages.addAll(historyBeforeCurrent);
+            }
             messages.add(new UserMessage(userPayload));
             ChatResponse response = chatModel.call(new Prompt(messages));
             return extractAssistantText(response);
@@ -263,11 +284,12 @@ public class LlmChatService implements ChatService {
         return t.contains("have enough information to answer that right now");
     }
 
-    private void logUnknownQuery(String question, String conversationId) {
+    private void logUnknownQuery(String question, String conversationId, String role) {
         try {
             UnknownQuery row = new UnknownQuery();
             row.setQuestion(question);
             row.setCreatedAt(new Date());
+            row.setRole(normalizeRole(role));
             if (conversationId != null && !conversationId.isBlank()) {
                 row.setConversationId(conversationId);
             }
@@ -512,5 +534,76 @@ public class LlmChatService implements ChatService {
             out.add(d);
         }
         return out;
+    }
+
+    /**
+     * Officer prompts can include internal records; remove direct PII before LLM handoff.
+     * Uses deterministic pseudonyms so references remain consistent inside one prompt.
+     */
+    private static String sanitizeOfficerTextForLlm(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String masked = text;
+        Matcher labeled = SENSITIVE_LABELED_VALUE_PATTERN.matcher(masked);
+        StringBuffer sb = new StringBuffer();
+        while (labeled.find()) {
+            String label = labeled.group(1);
+            String value = labeled.group(2) == null ? "" : labeled.group(2).trim();
+            String replacement = label + ": " + pseudoMask(label, value);
+            labeled.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        labeled.appendTail(sb);
+        masked = sb.toString();
+
+        masked = EMAIL_PATTERN.matcher(masked).replaceAll("[MASKED:EMAIL]");
+        masked = PHONE_PATTERN.matcher(masked).replaceAll("[MASKED:PHONE]");
+        masked = SHIP_NUMBER_PATTERN.matcher(masked).replaceAll("[MASKED:SHIP_NUMBER]");
+        masked = JOB_ID_PATTERN.matcher(masked).replaceAll("[MASKED:JOB_ID]");
+        masked = maskLineValue(masked, ADDRESS_LINE_PATTERN, "ADDRESS");
+        masked = maskLineValue(masked, FULL_NAME_LINE_PATTERN, "NAME");
+        return masked;
+    }
+
+    private static List<Message> sanitizeOfficerHistoryForLlm(List<Message> history) {
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+        List<Message> sanitized = new ArrayList<>(history.size());
+        for (Message message : history) {
+            if (message instanceof UserMessage userMessage) {
+                sanitized.add(new UserMessage(sanitizeOfficerTextForLlm(userMessage.getText())));
+            } else if (message instanceof AssistantMessage assistantMessage) {
+                sanitized.add(new AssistantMessage(sanitizeOfficerTextForLlm(assistantMessage.getText())));
+            } else {
+                sanitized.add(message);
+            }
+        }
+        return sanitized;
+    }
+
+    private static String pseudoMask(String label, String value) {
+        if (value == null || value.isBlank()) {
+            return "[MASKED]";
+        }
+        String normalizedLabel = label == null ? "field" : label.replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
+        int marker = Math.abs(Objects.hash(normalizedLabel, value.toLowerCase(Locale.ROOT)));
+        String token = Integer.toHexString(marker);
+        if (token.length() > 8) {
+            token = token.substring(0, 8);
+        }
+        return "[MASKED:" + normalizedLabel + "_" + token + "]";
+    }
+
+    private static String maskLineValue(String text, Pattern pattern, String tokenLabel) {
+        Matcher matcher = pattern.matcher(text);
+        StringBuffer out = new StringBuffer();
+        while (matcher.find()) {
+            String label = matcher.group(1);
+            String replacement = label + ": [MASKED:" + tokenLabel + "]";
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(out);
+        return out.toString();
     }
 }

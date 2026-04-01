@@ -319,6 +319,14 @@
       </div>
       <div class="panel-body">
         <div id="tab-unknown">
+          <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;">
+            <label for="unknownRole" style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Role</label>
+            <select id="unknownRole" style="font-size:0.78rem;padding:0.3rem 0.45rem;border-radius:6px;border:1px solid var(--border);background:var(--elev);color:var(--text);">
+              <option value="officer" selected>Officer</option>
+              <option value="customer">Customer</option>
+              <option value="all">All</option>
+            </select>
+          </div>
           <button type="button" id="loadUnknown" style="margin-bottom:0.5rem;font-size:0.8rem;padding:0.35rem 0.6rem;border-radius:6px;border:1px solid var(--border);background:var(--elev);color:var(--text);cursor:pointer;">Refresh list</button>
           <div class="list" id="unknownList"></div>
           <p class="status" id="unknownStatus"></p>
@@ -451,12 +459,14 @@
 
       const unknownList = document.getElementById("unknownList");
       const unknownStatus = document.getElementById("unknownStatus");
+      const unknownRole = document.getElementById("unknownRole");
 
       async function loadUnknown() {
         unknownStatus.textContent = "Loading…";
         unknownList.innerHTML = "";
         try {
-          const res = await fetch("admin/unknown-queries?page=0&size=50", { headers: adminHeaders(false) });
+          const selectedRole = (unknownRole && unknownRole.value) ? unknownRole.value : "officer";
+          const res = await fetch("admin/unknown-queries?page=0&size=50&role=" + encodeURIComponent(selectedRole), { headers: adminHeaders(false) });
           if (res.status === 404) {
             unknownStatus.textContent = "Admin API disabled (conf.admin.enabled=false).";
             return;
@@ -468,7 +478,7 @@
           if (!res.ok) throw new Error(await res.text());
           const page = await res.json();
           const items = page.content || [];
-          unknownStatus.textContent = items.length ? items.length + " item(s)" : "No unknown queries.";
+          unknownStatus.textContent = items.length ? items.length + " item(s) for role: " + selectedRole : "No unknown queries for role: " + selectedRole + ".";
           items.forEach(function (row) {
             const c = document.createElement("div");
             c.className = "card";
@@ -476,7 +486,8 @@
               '<div class="q"></div><div class="meta"></div><div class="actions">' +
               '<button type="button" class="del">Dismiss</button></div>';
             c.querySelector(".q").textContent = row.question || "(no text)";
-            c.querySelector(".meta").textContent = (row.id || "") + (row.createdAt ? " · " + row.createdAt : "");
+            c.querySelector(".meta").textContent =
+              (row.role || "customer") + " · " + (row.id || "") + (row.createdAt ? " · " + row.createdAt : "");
             c.querySelector(".del").addEventListener("click", async function () {
               if (!confirm("Remove this unknown query?")) return;
               const dr = await fetch("admin/unknown-queries/" + encodeURIComponent(row.id), {
@@ -497,6 +508,9 @@
       }
 
       document.getElementById("loadUnknown").addEventListener("click", loadUnknown);
+      if (unknownRole) {
+        unknownRole.addEventListener("change", loadUnknown);
+      }
 
       const draftsList = document.getElementById("draftsList");
       const draftsStatus = document.getElementById("draftsStatus");

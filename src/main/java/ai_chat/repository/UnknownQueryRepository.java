@@ -8,4 +8,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 public interface UnknownQueryRepository extends MongoRepository<UnknownQuery, String> {
 
     Page<UnknownQuery> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    Page<UnknownQuery> findByRoleOrderByCreatedAtDesc(String role, Pageable pageable);
 }

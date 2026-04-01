@@ -81,9 +81,10 @@ public class AdminKnowledgeController {
     @Operation(summary = "List customer questions that RAG could not answer (newest first)")
     public Page<UnknownQuery> listUnknown(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String role) {
         Pageable p = PageRequest.of(Math.max(0, page), Math.min(200, Math.max(1, size)));
-        return knowledgeAdminService.listUnknownQueries(p);
+        return knowledgeAdminService.listUnknownQueriesByRole(role, p);
     }
 
     @DeleteMapping("/unknown-queries/{id}")

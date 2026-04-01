@@ -24,4 +24,7 @@ public class UnknownQuery {
 
     /** Present when the question came from {@code /chat/rag/conversation}. */
     private String conversationId;
+
+    /** Origin role of the question: customer or officer. */
+    private String role;
 }

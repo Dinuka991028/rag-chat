@@ -108,6 +108,14 @@ public class KnowledgeAdminService {
         return unknownQueryRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
+    public Page<ai_chat.domain.UnknownQuery> listUnknownQueriesByRole(String role, Pageable pageable) {
+        if (role == null || role.isBlank() || "all".equalsIgnoreCase(role.trim())) {
+            return listUnknownQueries(pageable);
+        }
+        String normalizedRole = normalizeRole(role);
+        return unknownQueryRepository.findByRoleOrderByCreatedAtDesc(normalizedRole, pageable);
+    }
+
     public void deleteUnknownQuery(String id) {
         unknownQueryRepository.deleteById(id);
     }
@@ -132,5 +140,13 @@ public class KnowledgeAdminService {
         out.put("remainingUnknownQueries", unknownQueryRepository.count());
         out.put("remainingTrainingDrafts", kbTrainingDraftRepository.count());
         return out;
+    }
+
+    private static String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "customer";
+        }
+        String r = role.trim().toLowerCase();
+        return "officer".equals(r) ? "officer" : "customer";
     }
 }
