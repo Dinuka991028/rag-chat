@@ -31,8 +31,9 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
             Pattern.compile("(?im)\\b(address|location|residence)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
     private static final Pattern FULL_NAME_LINE_PATTERN =
             Pattern.compile("(?im)\\b(customer\\s*name|full\\s*name|applicant\\s*name|owner\\s*name|name)\\b\\s*[:#-]\\s*([^\\n\\r]+)");
+    /** Any bracketed MASKED token the model might echo from context (label + optional hash + optional disambiguator). */
     private static final Pattern MASKED_TOKEN_PATTERN =
-            Pattern.compile("\\[MASKED:([A-Z_]+?)(?:_[0-9a-f]+(?:_\\d+)?)?\\]", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\[MASKED:([A-Za-z0-9_]+)_([0-9a-fA-F]+)(?:_(\\d+))?\\]");
 
     @Override
     public PrivacyPayload sanitizeForLlm(String text) {
@@ -65,25 +66,28 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
         if (response == null || response.isBlank() || tokenMap == null || tokenMap.isEmpty()) {
             return response;
         }
-        String restored = response;
+        String restored = normalizeForUnmask(response);
         List<String> tokens = new ArrayList<>(tokenMap.keySet());
         tokens.sort((a, b) -> Integer.compare(b.length(), a.length()));
         for (String token : tokens) {
             String original = tokenMap.get(token);
             if (original != null) {
                 restored = restored.replace(token, original);
+                if (!token.equals(token.toUpperCase(Locale.ROOT))) {
+                    restored = restored.replace(token.toUpperCase(Locale.ROOT), original);
+                }
             }
         }
 
-        // Fallback if model normalized token suffix but kept label.
+        // Second pass: hex case-insensitive + structural variants of the same token.
         Matcher matcher = MASKED_TOKEN_PATTERN.matcher(restored);
         StringBuffer out = new StringBuffer();
         while (matcher.find()) {
+            String full = matcher.group(0);
             String label = matcher.group(1) == null ? "" : matcher.group(1).toUpperCase(Locale.ROOT);
-            String replacement = uniqueValueForLabel(label, tokenMap);
-            if (replacement == null) {
-                replacement = matcher.group();
-            }
+            String hex = matcher.group(2) == null ? "" : matcher.group(2).toLowerCase(Locale.ROOT);
+            String disambig = matcher.group(3);
+            String replacement = resolveMaskedToken(full, label, hex, disambig, tokenMap);
             matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(out);
@@ -128,7 +132,7 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
         String token = "[MASKED:" + normalizedLabel + "_" + markerHex + "]";
         String existing = tokenMap.get(token);
         if (existing == null || existing.equals(value)) {
-            tokenMap.put(token, value);
+            putTokenAliases(token, value, tokenMap);
             return token;
         }
         int suffix = 2;
@@ -137,8 +141,81 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
             candidate = "[MASKED:" + normalizedLabel + "_" + markerHex + "_" + suffix + "]";
             suffix++;
         }
-        tokenMap.put(candidate, value);
+        putTokenAliases(candidate, value, tokenMap);
         return candidate;
+    }
+
+    private static void putTokenAliases(String token, String value, Map<String, String> tokenMap) {
+        tokenMap.put(token, value);
+        int open = token.indexOf('[');
+        int close = token.indexOf(']');
+        if (open >= 0 && close > open) {
+            String inner = token.substring(open + 1, close);
+            if (inner.contains("_")) {
+                tokenMap.put(inner, value);
+            }
+        }
+        Matcher variant = Pattern.compile("\\[MASKED:([A-Za-z0-9_]+)_([0-9a-f]+)((?:_\\d+)?)\\]").matcher(token);
+        if (variant.matches()) {
+            String alt = "[MASKED:" + variant.group(1) + "_" + variant.group(2).toUpperCase(Locale.ROOT)
+                    + (variant.group(3) == null ? "" : variant.group(3)) + "]";
+            if (!alt.equals(token)) {
+                tokenMap.put(alt, value);
+            }
+        }
+    }
+
+    private static String normalizeForUnmask(String response) {
+        if (response == null) {
+            return "";
+        }
+        String t = response;
+        t = t.replace('\u200B', ' ')
+                .replace('\u200C', ' ')
+                .replace('\u200D', ' ')
+                .replace('\uFEFF', ' ');
+        return t;
+    }
+
+    private static String resolveMaskedToken(String full, String label, String hex, String disambig, Map<String, String> tokenMap) {
+        if (full == null) {
+            return "";
+        }
+        if (tokenMap.containsKey(full)) {
+            return tokenMap.get(full);
+        }
+        String canonical = disambig == null
+                ? "[MASKED:" + label + "_" + hex + "]"
+                : "[MASKED:" + label + "_" + hex + "_" + disambig + "]";
+        if (tokenMap.containsKey(canonical)) {
+            return tokenMap.get(canonical);
+        }
+        for (Map.Entry<String, String> e : tokenMap.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(canonical)) {
+                return e.getValue();
+            }
+        }
+        String innerCanon = canonical.substring(1, canonical.length() - 1);
+        if (tokenMap.containsKey(innerCanon)) {
+            return tokenMap.get(innerCanon);
+        }
+        String canonicalUpperHex = disambig == null
+                ? "[MASKED:" + label + "_" + hex.toUpperCase(Locale.ROOT) + "]"
+                : "[MASKED:" + label + "_" + hex.toUpperCase(Locale.ROOT) + "_" + disambig + "]";
+        if (tokenMap.containsKey(canonicalUpperHex)) {
+            return tokenMap.get(canonicalUpperHex);
+        }
+        String hexUpper = hex.toUpperCase(Locale.ROOT);
+        for (Map.Entry<String, String> e : tokenMap.entrySet()) {
+            String k = e.getKey();
+            if (!k.toUpperCase(Locale.ROOT).contains("MASKED:" + label + "_")) {
+                continue;
+            }
+            if (k.contains("_" + hex) || k.contains("_" + hexUpper)) {
+                return e.getValue();
+            }
+        }
+        return full;
     }
 
     private static String maskLineValue(String text, Pattern pattern, String tokenLabel, Map<String, String> tokenMap) {
@@ -166,19 +243,5 @@ public class OfficerPromptPrivacyServiceImpl implements OfficerPromptPrivacyServ
         return out.toString();
     }
 
-    private static String uniqueValueForLabel(String normalizedLabel, Map<String, String> tokenMap) {
-        String match = null;
-        String prefix = "[MASKED:" + normalizedLabel + "_";
-        for (Map.Entry<String, String> e : tokenMap.entrySet()) {
-            if (!e.getKey().startsWith(prefix)) {
-                continue;
-            }
-            if (match != null && !match.equals(e.getValue())) {
-                return null;
-            }
-            match = e.getValue();
-        }
-        return match;
-    }
 }
 
