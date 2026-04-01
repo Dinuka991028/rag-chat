@@ -91,6 +91,32 @@
     .m.a { align-self: flex-start; background: #12151a; border-left: 3px solid var(--blue); }
     .m.s { align-self: center; color: var(--muted); font-size: 0.82rem; }
     .m.e { align-self: center; background: rgba(240, 113, 120, 0.12); color: var(--red); border: 1px solid rgba(240, 113, 120, 0.35); }
+    .m.t {
+      align-self: flex-start;
+      background: #12151a;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--blue);
+    }
+    .typing-bubble {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 1rem;
+    }
+    .typing-bubble .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      opacity: 0.5;
+      animation: typing-dot 1.25s ease-in-out infinite;
+    }
+    .typing-bubble .dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-bubble .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing-dot {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
     .compose {
       padding: 0.85rem 1rem 1rem;
       background: var(--panel);
@@ -346,6 +372,7 @@
       const tin = document.getElementById("tin");
       const tgo = document.getElementById("tgo");
       let conversationId = null;
+      let typingEl = null;
 
       const adminKeyInput = document.getElementById("adminKey");
       adminKeyInput.value = sessionStorage.getItem(STORAGE_KEY) || "";
@@ -371,6 +398,23 @@
         msgs.scrollTop = msgs.scrollHeight;
       }
 
+      function showTyping() {
+        removeTyping();
+        typingEl = document.createElement("div");
+        typingEl.className = "m t";
+        typingEl.setAttribute("role", "status");
+        typingEl.setAttribute("aria-label", "Assistant is typing");
+        typingEl.innerHTML =
+          '<div class="typing-bubble" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+        msgs.appendChild(typingEl);
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+
+      function removeTyping() {
+        if (typingEl && typingEl.parentNode) typingEl.remove();
+        typingEl = null;
+      }
+
       addMsg("s", "Internal RAG: questions use officer-scoped KB passages.");
 
       async function sendChat() {
@@ -379,6 +423,7 @@
         tin.value = "";
         addMsg("u", text);
         tgo.disabled = true;
+        showTyping();
         try {
           const res = await fetch("chat/rag/conversation", {
             method: "POST",
@@ -392,8 +437,10 @@
           if (!res.ok) throw new Error(await res.text() || res.statusText);
           const data = await res.json();
           if (data.conversationId) conversationId = data.conversationId;
+          removeTyping();
           addMsg("a", data.reply || "(empty)");
         } catch (e) {
+          removeTyping();
           addMsg("e", e.message || String(e));
         } finally {
           tgo.disabled = false;
