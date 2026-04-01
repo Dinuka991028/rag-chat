@@ -1,6 +1,7 @@
 package ai_chat.service;
 
 import ai_chat.domain.KnowledgeDocument;
+import ai_chat.domain.OfficerKnowledgeDocument;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -93,8 +94,13 @@ public class HybridRetrievalService {
                 shipQuery.addCriteria(roleCriteria);
             }
             shipQuery.limit(topK);
-            List<KnowledgeDocument> byShip = mongoTemplate.find(shipQuery, KnowledgeDocument.class);
-            out.addAll(byShip.stream().map(HybridRetrievalService::toSpringDocument).toList());
+            if ("officer".equals(normalizeRole(role))) {
+                List<OfficerKnowledgeDocument> byShip = mongoTemplate.find(shipQuery, OfficerKnowledgeDocument.class);
+                out.addAll(byShip.stream().map(HybridRetrievalService::toSpringDocument).toList());
+            } else {
+                List<KnowledgeDocument> byShip = mongoTemplate.find(shipQuery, KnowledgeDocument.class);
+                out.addAll(byShip.stream().map(HybridRetrievalService::toSpringDocument).toList());
+            }
         }
         TextCriteria criteria = TextCriteria.forDefaultLanguage().matching(query);
         Query textQuery = TextQuery.queryText(criteria)
@@ -106,8 +112,15 @@ public class HybridRetrievalService {
         if (roleCriteria != null) {
             textQuery.addCriteria(roleCriteria);
         }
-        List<KnowledgeDocument> rows = mongoTemplate.find(textQuery, KnowledgeDocument.class);
-        for (Document d : rows.stream().map(HybridRetrievalService::toSpringDocument).toList()) {
+        List<Document> keywordDocs;
+        if ("officer".equals(normalizeRole(role))) {
+            List<OfficerKnowledgeDocument> rows = mongoTemplate.find(textQuery, OfficerKnowledgeDocument.class);
+            keywordDocs = rows.stream().map(HybridRetrievalService::toSpringDocument).toList();
+        } else {
+            List<KnowledgeDocument> rows = mongoTemplate.find(textQuery, KnowledgeDocument.class);
+            keywordDocs = rows.stream().map(HybridRetrievalService::toSpringDocument).toList();
+        }
+        for (Document d : keywordDocs) {
             if (containsDocId(out, d.getId())) {
                 continue;
             }
@@ -159,7 +172,10 @@ public class HybridRetrievalService {
             Map<String, Object> m = d.getMetadata();
             String category = m == null || m.get("category") == null ? "" : String.valueOf(m.get("category"));
             String source = m == null || m.get("source") == null ? "" : String.valueOf(m.get("source"));
-            boolean officerDoc = "OfficerJobSummary".equalsIgnoreCase(category) || source.startsWith("officer-");
+            String audienceRole = m == null || m.get("audienceRole") == null ? "" : String.valueOf(m.get("audienceRole"));
+            boolean officerDoc = "officer".equalsIgnoreCase(audienceRole)
+                    || "OfficerJobSummary".equalsIgnoreCase(category)
+                    || source.startsWith("officer-");
             if (officerDoc) {
                 out.add(d);
             }
@@ -172,6 +188,7 @@ public class HybridRetrievalService {
             return null;
         }
         return new Criteria().orOperator(
+                Criteria.where("audienceRole").is("officer"),
                 Criteria.where("category").is("OfficerJobSummary"),
                 Criteria.where("source").regex("^officer-", "i"));
     }
@@ -224,6 +241,7 @@ public class HybridRetrievalService {
                 .onField("category", 2F)
                 .build();
         mongoTemplate.indexOps(KnowledgeDocument.class).createIndex(idx);
+        mongoTemplate.indexOps(OfficerKnowledgeDocument.class).createIndex(idx);
     }
 
     private static Document toSpringDocument(KnowledgeDocument kd) {
@@ -239,6 +257,29 @@ public class HybridRetrievalService {
         }
         if (kd.getSectionHeading() != null) {
             meta.put("sectionHeading", kd.getSectionHeading());
+        }
+        if (kd.getAudienceRole() != null) {
+            meta.put("audienceRole", kd.getAudienceRole());
+        }
+        return new Document(kd.getId(), kd.getContent(), meta);
+    }
+
+    private static Document toSpringDocument(OfficerKnowledgeDocument kd) {
+        Map<String, Object> meta = new HashMap<>();
+        if (kd.getCategory() != null) {
+            meta.put("category", kd.getCategory());
+        }
+        if (kd.getSource() != null) {
+            meta.put("source", kd.getSource());
+        }
+        if (kd.getChunkIndex() != null) {
+            meta.put("chunkIndex", kd.getChunkIndex());
+        }
+        if (kd.getSectionHeading() != null) {
+            meta.put("sectionHeading", kd.getSectionHeading());
+        }
+        if (kd.getAudienceRole() != null) {
+            meta.put("audienceRole", kd.getAudienceRole());
         }
         return new Document(kd.getId(), kd.getContent(), meta);
     }

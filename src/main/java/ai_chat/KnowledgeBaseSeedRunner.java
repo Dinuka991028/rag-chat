@@ -5,6 +5,7 @@ import ai_chat.kb.SrsChunker;
 import ai_chat.kb.SrsMarkdownChunker;
 import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
+import ai_chat.repository.OfficerKnowledgeDocumentRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -43,6 +44,9 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
 
     @Autowired
     private KnowledgeDocumentRepository knowledgeDocumentRepository;
+
+    @Autowired
+    private OfficerKnowledgeDocumentRepository officerKnowledgeDocumentRepository;
 
     @Autowired
     private VectorStore vectorStore;
@@ -90,7 +94,7 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
     @Override
     public void run(String... args) {
 
-        if (knowledgeDocumentRepository.count() > 0) {
+        if (knowledgeDocumentRepository.count() > 0 || officerKnowledgeDocumentRepository.count() > 0) {
             return;
         }
 

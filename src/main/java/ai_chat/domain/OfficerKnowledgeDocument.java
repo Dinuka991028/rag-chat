@@ -11,15 +11,15 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.List;
 
 /**
- * Customer knowledge-base chunk stored in MongoDB collection {@code kb_documents}.
+ * Officer knowledge-base chunk stored in MongoDB collection {@code kb_documents_officer}.
  */
-@Document(collection = "kb_documents")
+@Document(collection = "kb_documents_officer")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class KnowledgeDocument {
+public class OfficerKnowledgeDocument {
 
     @Id
     private String id;
@@ -29,22 +29,17 @@ public class KnowledgeDocument {
     private String category;
 
     private String source;
-    
+
     /** Audience for this KB chunk: customer or officer. */
     private String audienceRole;
 
-    /** Order within the SRS ingest; optional, for debugging. */
     private Integer chunkIndex;
 
-    /** Best-effort section title from the SRS (e.g. 2.2.1 Portal Login). */
     private String sectionHeading;
 
-    /** Embedding vector; set when rows are ingested via {@link ai_chat.vectorstore.LocalMongoVectorStore#add}. */
     private List<Float> embedding;
 
-    /** Embedding model tag used to create this vector (for compatibility checks). */
     private String embeddingModel;
 
-    /** Application-level embedding schema/version (for safe migration controls). */
     private String embeddingVersion;
 }
