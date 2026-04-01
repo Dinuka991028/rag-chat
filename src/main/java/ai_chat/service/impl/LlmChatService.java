@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -251,21 +252,27 @@ public class LlmChatService implements ChatService {
     private String generateRagAnswer(List<Document> found, String customerQuestion, List<Message> historyBeforeCurrent, String role) {
         String userPayload = promptBuilderService.buildRagPayload(found, customerQuestion, role);
         String effectiveRole = normalizeRole(role);
+        Map<String, String> officerMaskMap = null;
         if ("officer".equals(effectiveRole)) {
-            userPayload = sanitizeOfficerTextForLlm(userPayload);
+            officerMaskMap = new LinkedHashMap<>();
+            userPayload = sanitizeOfficerTextForLlm(userPayload, officerMaskMap);
         }
         String systemPrompt = "officer".equals(effectiveRole) ? SYSTEM_RAG_OFFICER : SYSTEM_RAG;
         try {
             List<Message> messages = new ArrayList<>();
             messages.add(new SystemMessage(systemPrompt));
             if ("officer".equals(effectiveRole)) {
-                messages.addAll(sanitizeOfficerHistoryForLlm(historyBeforeCurrent));
+                messages.addAll(sanitizeOfficerHistoryForLlm(historyBeforeCurrent, officerMaskMap));
             } else {
                 messages.addAll(historyBeforeCurrent);
             }
             messages.add(new UserMessage(userPayload));
             ChatResponse response = chatModel.call(new Prompt(messages));
-            return extractAssistantText(response);
+            String reply = extractAssistantText(response);
+            if ("officer".equals(effectiveRole)) {
+                return unmaskOfficerResponse(reply, officerMaskMap);
+            }
+            return reply;
         } catch (Exception e) {
             System.err.println("Chat model error: " + e.getMessage());
             return "Sorry, the AI service is temporarily unavailable. Please try again later.";
@@ -540,7 +547,7 @@ public class LlmChatService implements ChatService {
      * Officer prompts can include internal records; remove direct PII before LLM handoff.
      * Uses deterministic pseudonyms so references remain consistent inside one prompt.
      */
-    private static String sanitizeOfficerTextForLlm(String text) {
+    private static String sanitizeOfficerTextForLlm(String text, Map<String, String> tokenMap) {
         if (text == null || text.isBlank()) {
             return "";
         }
@@ -550,31 +557,31 @@ public class LlmChatService implements ChatService {
         while (labeled.find()) {
             String label = labeled.group(1);
             String value = labeled.group(2) == null ? "" : labeled.group(2).trim();
-            String replacement = label + ": " + pseudoMask(label, value);
+            String replacement = label + ": " + registerToken(label, value, tokenMap);
             labeled.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
         labeled.appendTail(sb);
         masked = sb.toString();
 
-        masked = EMAIL_PATTERN.matcher(masked).replaceAll("[MASKED:EMAIL]");
-        masked = PHONE_PATTERN.matcher(masked).replaceAll("[MASKED:PHONE]");
-        masked = SHIP_NUMBER_PATTERN.matcher(masked).replaceAll("[MASKED:SHIP_NUMBER]");
-        masked = JOB_ID_PATTERN.matcher(masked).replaceAll("[MASKED:JOB_ID]");
-        masked = maskLineValue(masked, ADDRESS_LINE_PATTERN, "ADDRESS");
-        masked = maskLineValue(masked, FULL_NAME_LINE_PATTERN, "NAME");
+        masked = maskPatternWithToken(masked, EMAIL_PATTERN, "EMAIL", tokenMap);
+        masked = maskPatternWithToken(masked, PHONE_PATTERN, "PHONE", tokenMap);
+        masked = maskPatternWithToken(masked, SHIP_NUMBER_PATTERN, "SHIP_NUMBER", tokenMap);
+        masked = maskPatternWithToken(masked, JOB_ID_PATTERN, "JOB_ID", tokenMap);
+        masked = maskLineValue(masked, ADDRESS_LINE_PATTERN, "ADDRESS", tokenMap);
+        masked = maskLineValue(masked, FULL_NAME_LINE_PATTERN, "NAME", tokenMap);
         return masked;
     }
 
-    private static List<Message> sanitizeOfficerHistoryForLlm(List<Message> history) {
+    private static List<Message> sanitizeOfficerHistoryForLlm(List<Message> history, Map<String, String> tokenMap) {
         if (history == null || history.isEmpty()) {
             return List.of();
         }
         List<Message> sanitized = new ArrayList<>(history.size());
         for (Message message : history) {
             if (message instanceof UserMessage userMessage) {
-                sanitized.add(new UserMessage(sanitizeOfficerTextForLlm(userMessage.getText())));
+                sanitized.add(new UserMessage(sanitizeOfficerTextForLlm(userMessage.getText(), tokenMap)));
             } else if (message instanceof AssistantMessage assistantMessage) {
-                sanitized.add(new AssistantMessage(sanitizeOfficerTextForLlm(assistantMessage.getText())));
+                sanitized.add(new AssistantMessage(sanitizeOfficerTextForLlm(assistantMessage.getText(), tokenMap)));
             } else {
                 sanitized.add(message);
             }
@@ -582,28 +589,70 @@ public class LlmChatService implements ChatService {
         return sanitized;
     }
 
-    private static String pseudoMask(String label, String value) {
+    private static String registerToken(String label, String value, Map<String, String> tokenMap) {
         if (value == null || value.isBlank()) {
             return "[MASKED]";
         }
         String normalizedLabel = label == null ? "field" : label.replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
         int marker = Math.abs(Objects.hash(normalizedLabel, value.toLowerCase(Locale.ROOT)));
-        String token = Integer.toHexString(marker);
-        if (token.length() > 8) {
-            token = token.substring(0, 8);
+        String markerHex = Integer.toHexString(marker);
+        if (markerHex.length() > 8) {
+            markerHex = markerHex.substring(0, 8);
         }
-        return "[MASKED:" + normalizedLabel + "_" + token + "]";
+        String token = "[MASKED:" + normalizedLabel + "_" + markerHex + "]";
+        String existing = tokenMap.get(token);
+        if (existing == null || existing.equals(value)) {
+            tokenMap.put(token, value);
+            return token;
+        }
+        int suffix = 2;
+        String candidate = token;
+        while (tokenMap.containsKey(candidate) && !tokenMap.get(candidate).equals(value)) {
+            candidate = "[MASKED:" + normalizedLabel + "_" + markerHex + "_" + suffix + "]";
+            suffix++;
+        }
+        tokenMap.put(candidate, value);
+        return candidate;
     }
 
-    private static String maskLineValue(String text, Pattern pattern, String tokenLabel) {
+    private static String maskLineValue(String text, Pattern pattern, String tokenLabel, Map<String, String> tokenMap) {
         Matcher matcher = pattern.matcher(text);
         StringBuffer out = new StringBuffer();
         while (matcher.find()) {
             String label = matcher.group(1);
-            String replacement = label + ": [MASKED:" + tokenLabel + "]";
+            String value = matcher.group(2) == null ? "" : matcher.group(2).trim();
+            String replacement = label + ": " + registerToken(tokenLabel, value, tokenMap);
             matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(out);
         return out.toString();
+    }
+
+    private static String maskPatternWithToken(String text, Pattern pattern, String tokenLabel, Map<String, String> tokenMap) {
+        Matcher matcher = pattern.matcher(text);
+        StringBuffer out = new StringBuffer();
+        while (matcher.find()) {
+            String value = matcher.group() == null ? "" : matcher.group().trim();
+            String token = registerToken(tokenLabel, value, tokenMap);
+            matcher.appendReplacement(out, Matcher.quoteReplacement(token));
+        }
+        matcher.appendTail(out);
+        return out.toString();
+    }
+
+    private static String unmaskOfficerResponse(String response, Map<String, String> tokenMap) {
+        if (response == null || response.isBlank() || tokenMap == null || tokenMap.isEmpty()) {
+            return response;
+        }
+        String restored = response;
+        List<String> tokens = new ArrayList<>(tokenMap.keySet());
+        tokens.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        for (String token : tokens) {
+            String original = tokenMap.get(token);
+            if (original != null) {
+                restored = restored.replace(token, original);
+            }
+        }
+        return restored;
     }
 }
