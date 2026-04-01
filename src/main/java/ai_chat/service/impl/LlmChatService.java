@@ -45,6 +45,9 @@ public class LlmChatService implements ChatService {
     /** Short follow-ups (e.g. "yes") get combined with the previous user line for embedding search only. */
     private static final int RETRIEVAL_QUERY_COMBINE_MAX_LEN = 80;
     private static final Pattern SHIP_NUMBER_PATTERN = Pattern.compile("\\b[A-Z]-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GREETING_ONLY_PATTERN =
+            Pattern.compile("^(hi|hello|hey|salam|salaam|good\\s*(morning|afternoon|evening))\\s*[!.?]*$",
+                    Pattern.CASE_INSENSITIVE);
 
     private static final String SYSTEM_PLAIN =
             "You are an AI assistant for the Small Ship Registry Portal (SSRP) in Bahrain. "
@@ -122,6 +125,9 @@ public class LlmChatService implements ChatService {
             return decision.userMessage();
         }
         String safePrompt = decision.safeInput();
+        if (isGreetingOnly(safePrompt)) {
+            return "Hello. How can I help you with SSRP today?";
+        }
         String effectiveRole = normalizeRole(role);
         if (knowledgeDocumentRepository.count() == 0) {
             return "Knowledge base is empty.";
@@ -181,6 +187,11 @@ public class LlmChatService implements ChatService {
             return new ChatConversationResponse(id, decision.userMessage());
         }
         String safeMessage = decision.safeInput();
+        if (isGreetingOnly(safeMessage)) {
+            String reply = "Hello. How can I help you with SSRP today?";
+            conversationHistoryService.append(id, safeMessage, reply);
+            return new ChatConversationResponse(id, reply);
+        }
         String effectiveRole = normalizeRole(role);
 
         if (knowledgeDocumentRepository.count() == 0) {
@@ -279,11 +290,26 @@ public class LlmChatService implements ChatService {
         if (u.length() >= RETRIEVAL_QUERY_COMBINE_MAX_LEN) {
             return u;
         }
+        // Keep pure greetings standalone; do not leak prior topic into retrieval.
+        if (isGreetingOnly(u)) {
+            return u;
+        }
         String prev = lastUserContentInHistory(history);
         if (prev != null && !prev.isBlank()) {
             return (prev + " " + u).trim();
         }
         return u;
+    }
+
+    static boolean isGreetingOnly(String text) {
+        if (text == null) {
+            return false;
+        }
+        String t = text.trim();
+        if (t.isEmpty()) {
+            return false;
+        }
+        return GREETING_ONLY_PATTERN.matcher(t).matches();
     }
 
     private static String lastUserContentInHistory(List<Message> history) {

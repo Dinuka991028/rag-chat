@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LlmChatServiceRetrievalQueryTest {
 
@@ -24,5 +25,17 @@ class LlmChatServiceRetrievalQueryTest {
         assertEquals(
                 "What is the registration fee? yes",
                 LlmChatService.buildRetrievalQuery(history, "yes"));
+    }
+
+    @Test
+    void greetingDoesNotCombineWithPreviousUserLine() {
+        List<Message> history = new ArrayList<>();
+        history.add(new UserMessage("Show pending transfer requests"));
+        assertEquals("hi", LlmChatService.buildRetrievalQuery(history, "hi"));
+    }
+
+    @Test
+    void greetingDetectorAcceptsSimpleGreeting() {
+        assertTrue(LlmChatService.isGreetingOnly("Hello!"));
     }
 }
