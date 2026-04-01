@@ -81,6 +81,9 @@ public class LlmChatService implements ChatService {
                     + "Use ONLY the knowledge base excerpts in the user message. Do not use outside knowledge.\n"
                     + "Reply in concise internal-operations style with practical next steps when directly supported by excerpts.\n"
                     + "If excerpts contain [MASKED:...] placeholders, copy those tokens exactly (same brackets, label, and suffix).\n"
+                    + "When the question asks for task or job history, or when excerpts include a \"Task History:\" block, answer with a short numbered timeline (1., 2., …) "
+                    + "using only the facts from that block: task name, action/status, who updated, role, started and updated dates, and comment if present. "
+                    + "Do not add steps or events not listed there.\n"
                     + "If the excerpts do not clearly and directly answer the question, respond ONLY with exactly: "
                     + "Sorry, I don't have enough information to answer that right now.\n"
                     + "Do not invent section numbers, system statuses, process stages, or approval outcomes not present in excerpts.";

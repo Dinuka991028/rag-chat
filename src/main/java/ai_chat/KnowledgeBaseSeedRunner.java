@@ -271,6 +271,8 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         String taskStatus = extractFlexibleString(row.get("taskStatus"));
         String processInstanceId = extractFlexibleString(row.get("processInstanceId"));
         String taskAction = extractFlexibleString(row.get("taskAction"));
+        JsonNode executeTaskNode = firstPresent(row, "executeTaskDTO", "executeTaskDto");
+        JsonNode historyNode = executeTaskNode == null ? null : firstPresent(executeTaskNode, "history", "taskHistory");
 
         StringBuilder sb = new StringBuilder();
         appendLine(sb, "Officer case summary");
@@ -290,7 +292,75 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         appendLine(sb, "Task Status", taskStatus);
         appendLine(sb, "Process Instance ID", processInstanceId);
         appendLine(sb, "Task Action", taskAction);
+        appendHistoryLines(sb, historyNode);
         return sb.toString().trim();
+    }
+
+    private static JsonNode firstPresent(JsonNode node, String... fieldNames) {
+        if (node == null || node.isMissingNode() || node.isNull() || fieldNames == null) {
+            return null;
+        }
+        for (String field : fieldNames) {
+            if (field == null || field.isBlank()) {
+                continue;
+            }
+            JsonNode child = node.get(field);
+            if (child != null && !child.isMissingNode() && !child.isNull()) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private static void appendHistoryLines(StringBuilder sb, JsonNode historyNode) {
+        if (historyNode == null || historyNode.isMissingNode() || historyNode.isNull() || !historyNode.isArray()
+                || historyNode.isEmpty()) {
+            return;
+        }
+        sb.append('\n').append("Task History:").append('\n');
+        int idx = 1;
+        for (JsonNode item : historyNode) {
+            if (item == null || item.isMissingNode() || item.isNull() || !item.isObject()) {
+                continue;
+            }
+            String taskName = extractFlexibleString(item.get("taskName"));
+            String updatedUser = extractFlexibleString(item.get("updatedUser"));
+            String updatedUserRole = extractFlexibleString(item.get("updatedUserRole"));
+            String startedDate = extractFlexibleString(item.get("startedDate"));
+            String updatedDate = extractFlexibleString(item.get("updatedDate"));
+            String actionStatus = extractFlexibleString(item.get("actionStatus"));
+            String comment = extractFlexibleString(item.get("comment"));
+
+            StringBuilder line = new StringBuilder();
+            line.append(idx++).append(") ");
+            if (!taskName.isBlank()) {
+                line.append("Task=").append(taskName).append("; ");
+            }
+            if (!actionStatus.isBlank()) {
+                line.append("Status=").append(actionStatus).append("; ");
+            }
+            if (!updatedUser.isBlank()) {
+                line.append("Updated User=").append(updatedUser).append("; ");
+            }
+            if (!updatedUserRole.isBlank()) {
+                line.append("Role=").append(updatedUserRole).append("; ");
+            }
+            if (!startedDate.isBlank()) {
+                line.append("Started=").append(startedDate).append("; ");
+            }
+            if (!updatedDate.isBlank()) {
+                line.append("Updated=").append(updatedDate).append("; ");
+            }
+            if (!comment.isBlank()) {
+                line.append("Comment=").append(comment).append("; ");
+            }
+
+            String built = line.toString().trim();
+            if (built.endsWith(";")) {
+                built = built.substring(0, built.length() - 1);
+            }
+            sb.append(built).append('\n');
+        }
     }
 
     private static String extractFlexibleString(JsonNode n) {
