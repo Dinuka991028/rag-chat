@@ -72,9 +72,13 @@ public class HybridRetrievalService {
                 .topK(effectiveVectorTopK)
                 .similarityThreshold(similarityThreshold)
                 .build();
-        List<Document> vector = vectorStore instanceof LocalMongoVectorStore localMongoVectorStore
-                ? localMongoVectorStore.similaritySearch(vectorRequest, role)
-                : vectorStore.similaritySearch(vectorRequest);
+        List<Document> vector;
+        if (vectorStore instanceof LocalMongoVectorStore localMongoVectorStore) {
+            // Officer retrieval needs role scoping inside the local Mongo vector store.
+            vector = localMongoVectorStore.similaritySearch(vectorRequest, role);
+        } else {
+            vector = vectorStore.similaritySearch(vectorRequest);
+        }
         List<Document> scopedVector = filterByRole(vector, role);
         if (!hybridEnabled || query == null || query.isBlank()) {
             return cap(scopedVector, vectorTopK);
