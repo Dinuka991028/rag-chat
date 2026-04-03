@@ -20,11 +20,10 @@ import java.util.regex.Pattern;
 public class OfficerCaseLookupService {
 
     /**
-     * Ship numbers in this project tend to look like {@code BH-1245} or {@code J-0001};
-     * examples sometimes include {@code BAH-xxxx}.
+     * Vessel identifiers: {@code BH-…} for ships, {@code J-…} for jet skis.
      */
     private static final Pattern SHIP_NUMBER_PATTERN =
-            Pattern.compile("\\b(?:BAH|BH|J)-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\b(?:BH|J)-\\d{3,}\\b", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern JOB_ID_PATTERN = Pattern.compile("\\b\\d{6,}\\b");
 
@@ -201,13 +200,7 @@ public class OfficerCaseLookupService {
         if (s.isBlank()) {
             return List.of();
         }
-        List<String> out = new ArrayList<>();
-        out.add(s);
-        if (s.startsWith("BAH-")) {
-            out.add("BH-" + s.substring("BAH-".length()));
-        }
-        // Deduplicate while preserving order.
-        return out.stream().distinct().toList();
+        return List.of(s);
     }
 
     private static final class OfficerCaseSummary {
