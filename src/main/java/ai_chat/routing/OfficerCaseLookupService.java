@@ -75,9 +75,9 @@ public class OfficerCaseLookupService {
     private String tryBuildByShip(String shipNumberRaw) {
         List<String> candidates = shipCandidates(shipNumberRaw);
         for (String candidate : candidates) {
-            List<OfficerKnowledgeDocument> docs = findOfficerDocsByContentRegex(
-                    buildShipRegex(candidate),
-                    6);
+            // All OfficerJobSummary rows for this ship (vector top-K would cap and can miss tasks).
+            List<OfficerKnowledgeDocument> docs =
+                    findOfficerDocsByContentRegex(buildShipRegex(candidate), 0);
             if (docs.isEmpty()) {
                 continue;
             }
@@ -106,12 +106,17 @@ public class OfficerCaseLookupService {
         return OfficerCaseSummary.formatJobSummary(jobId, docs);
     }
 
+    /**
+     * @param limit positive = max documents; {@code 0} or negative = no cap (all matches).
+     */
     private List<OfficerKnowledgeDocument> findOfficerDocsByContentRegex(String contentRegex, int limit) {
         Query q = new Query();
         q.addCriteria(Criteria.where("audienceRole").is("officer"));
         q.addCriteria(Criteria.where("category").is("OfficerJobSummary"));
         q.addCriteria(Criteria.where("content").regex(contentRegex, "i"));
-        q.limit(Math.max(1, limit));
+        if (limit > 0) {
+            q.limit(limit);
+        }
         return mongoTemplate.find(q, OfficerKnowledgeDocument.class);
     }
 
