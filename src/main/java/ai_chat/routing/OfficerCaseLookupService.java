@@ -93,7 +93,7 @@ public class OfficerCaseLookupService {
         if (docs.isEmpty()) {
             return null;
         }
-        return OfficerCaseSummary.formatTaskSummary(taskId, docs);
+        return OfficerCaseSummary.formatTaskSummary(docs);
     }
 
     private String tryBuildByJobId(String jobId) {
@@ -205,7 +205,6 @@ public class OfficerCaseLookupService {
 
     private static final class OfficerCaseSummary {
         private final String jobId;
-        private final String taskId;
         private final String taskName;
         private final String serviceName;
         private final String shipNumber;
@@ -215,12 +214,10 @@ public class OfficerCaseLookupService {
         private final String submitDate;
         private final String completedDate;
         private final String taskStatus;
-        private final String taskAction;
         private final List<String> taskHistoryLines;
 
         private OfficerCaseSummary(
                 String jobId,
-                String taskId,
                 String taskName,
                 String serviceName,
                 String shipNumber,
@@ -230,10 +227,8 @@ public class OfficerCaseLookupService {
                 String submitDate,
                 String completedDate,
                 String taskStatus,
-                String taskAction,
                 List<String> taskHistoryLines) {
             this.jobId = jobId;
-            this.taskId = taskId;
             this.taskName = taskName;
             this.serviceName = serviceName;
             this.shipNumber = shipNumber;
@@ -243,24 +238,27 @@ public class OfficerCaseLookupService {
             this.submitDate = submitDate;
             this.completedDate = completedDate;
             this.taskStatus = taskStatus;
-            this.taskAction = taskAction;
             this.taskHistoryLines = taskHistoryLines == null ? List.of() : taskHistoryLines;
         }
 
         static String formatShipSummary(String requestedShipNumber, List<OfficerKnowledgeDocument> docs) {
             List<OfficerCaseSummary> summaries = docs.stream()
                     .map(d -> OfficerCaseSummary.fromContent(d.getContent()))
-                    .filter(s -> s != null && (s.taskId != null || s.taskName != null || s.taskStatus != null))
+                    .filter(s -> s != null && (s.jobId != null || s.taskName != null || s.taskStatus != null))
                     .toList();
 
             if (summaries.isEmpty()) {
                 return null;
             }
 
-            // Deduplicate by taskId when present.
             Map<String, OfficerCaseSummary> unique = new LinkedHashMap<>();
             for (OfficerCaseSummary s : summaries) {
-                String key = s.taskId == null ? s.jobId + ":" + s.taskName : s.taskId;
+                String key =
+                        emptyToDash(s.jobId)
+                                + "|"
+                                + emptyToDash(s.taskName)
+                                + "|"
+                                + emptyToDash(s.submitDate);
                 if (!unique.containsKey(key)) {
                     unique.put(key, s);
                 }
@@ -287,7 +285,7 @@ public class OfficerCaseLookupService {
 
             out.append('\n').append("Tasks:").append('\n');
             for (OfficerCaseSummary s : ordered) {
-                out.append("- Task ID: ").append(emptyToDash(s.taskId))
+                out.append("- Job ID: ").append(emptyToDash(s.jobId))
                         .append(" | Status: ").append(emptyToDash(s.taskStatus));
                 if (s.taskName != null && !s.taskName.isBlank()) {
                     out.append(" | Task: ").append(s.taskName);
@@ -311,7 +309,7 @@ public class OfficerCaseLookupService {
             return out.toString().trim();
         }
 
-        static String formatTaskSummary(String requestedTaskId, List<OfficerKnowledgeDocument> docs) {
+        static String formatTaskSummary(List<OfficerKnowledgeDocument> docs) {
             List<OfficerCaseSummary> summaries = docs.stream()
                     .map(d -> OfficerCaseSummary.fromContent(d.getContent()))
                     .filter(s -> s != null)
@@ -323,7 +321,7 @@ public class OfficerCaseLookupService {
 
             StringBuilder out = new StringBuilder();
             out.append("Application/Task status").append('\n');
-            out.append("Task ID: ").append(requestedTaskId).append('\n');
+            out.append("Job ID: ").append(emptyToDash(s.jobId)).append('\n');
             if (s.taskName != null) out.append("Task Name: ").append(s.taskName).append('\n');
             if (s.taskStatus != null) out.append("Task Status: ").append(s.taskStatus).append('\n');
             if (s.serviceName != null) out.append("Service Name: ").append(s.serviceName).append('\n');
@@ -331,7 +329,6 @@ public class OfficerCaseLookupService {
             if (s.shipName != null) out.append("Ship Name: ").append(s.shipName).append('\n');
             if (s.submitDate != null) out.append("Submit Date: ").append(s.submitDate).append('\n');
             if (s.completedDate != null) out.append("Completed Date: ").append(s.completedDate).append('\n');
-            if (s.taskAction != null) out.append("Task Action: ").append(s.taskAction).append('\n');
 
             if (s.taskHistoryLines != null && !s.taskHistoryLines.isEmpty()) {
                 out.append('\n').append("Task History (latest):").append('\n');
@@ -364,8 +361,7 @@ public class OfficerCaseLookupService {
 
             out.append('\n').append("Tasks:").append('\n');
             for (OfficerCaseSummary s : summaries) {
-                out.append("- Task ID: ").append(emptyToDash(s.taskId))
-                        .append(" | Status: ").append(emptyToDash(s.taskStatus))
+                out.append("- Status: ").append(emptyToDash(s.taskStatus))
                         .append(" | Task: ").append(emptyToDash(s.taskName))
                         .append('\n');
             }
@@ -378,7 +374,6 @@ public class OfficerCaseLookupService {
             }
 
             String jobId = extractLabel(content, "Job ID");
-            String taskId = extractLabel(content, "Task ID");
             String taskName = extractLabel(content, "Task Name");
             String serviceName = extractLabel(content, "Service Name");
             String shipNumber = extractLabel(content, "Ship Number");
@@ -388,12 +383,10 @@ public class OfficerCaseLookupService {
             String submitDate = extractLabel(content, "Submit Date");
             String completedDate = extractLabel(content, "Completed Date");
             String taskStatus = extractLabel(content, "Task Status");
-            String taskAction = extractLabel(content, "Task Action");
             List<String> taskHistoryLines = extractTaskHistoryLines(content);
 
             return new OfficerCaseSummary(
                     jobId,
-                    taskId,
                     taskName,
                     serviceName,
                     shipNumber,
@@ -403,7 +396,6 @@ public class OfficerCaseLookupService {
                     submitDate,
                     completedDate,
                     taskStatus,
-                    taskAction,
                     taskHistoryLines);
         }
 
