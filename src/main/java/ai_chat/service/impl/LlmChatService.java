@@ -269,9 +269,26 @@ public class LlmChatService implements ChatService {
             String deterministicReply =
                     officerQueryRoutingService.tryRouteDeterministicReply(safeMessage, effectiveRole);
             if (deterministicReply != null) {
-                deterministicReply = applyOutboundGovernance(safeMessage, deterministicReply);
-                conversationHistoryService.append(id, safeMessage, deterministicReply);
-                return new ChatConversationResponse(id, deterministicReply);
+
+                // Convert deterministic reply into a pseudo document
+                Document doc = new Document(
+                        "deterministic",
+                        deterministicReply,
+                        Map.of(
+                                "category", "OfficerDeterministic",
+                                "source", "officer-deterministic",
+                                "audienceRole", "officer"
+                        )
+                );
+
+                List<Document> docs = List.of(doc);
+
+                String reply = generateRagAnswer(docs, safeMessage, history, effectiveRole);
+                reply = applyOutboundGovernance(safeMessage, reply);
+
+                conversationHistoryService.append(id, safeMessage, reply);
+
+                return new ChatConversationResponse(id, reply);
             }
         }
 
@@ -320,6 +337,7 @@ public class LlmChatService implements ChatService {
         if ("officer".equals(effectiveRole)) {
             privacyPayload = officerPromptPrivacyService.sanitizeForLlm(userPayload);
             userPayload = privacyPayload.text();
+            System.out.println("userPayload:   " +userPayload);
         }
         String systemPrompt = "officer".equals(effectiveRole) ? SYSTEM_RAG_OFFICER : SYSTEM_RAG;
         try {

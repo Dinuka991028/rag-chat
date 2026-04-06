@@ -6,11 +6,11 @@ import ai_chat.kb.SrsMarkdownChunker;
 import ai_chat.kb.SrsTextPreprocessor;
 import ai_chat.repository.KnowledgeDocumentRepository;
 import ai_chat.repository.OfficerKnowledgeDocumentRepository;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -19,9 +19,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -78,7 +78,9 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
     @Value("${conf.kb.srs-pdf-classpath:classpath:kb/ssrp-srs.pdf}")
     private String srsPdfClasspath;
 
-    /** When true, use {@link #srsMarkdownClasspath} if the resource exists (LLM-friendly markdown); else PDF. */
+    /**
+     * When true, use {@link #srsMarkdownClasspath} if the resource exists (LLM-friendly markdown); else PDF.
+     */
     @Value("${conf.kb.srs-use-markdown:true}")
     private boolean srsUseMarkdown;
 
@@ -101,7 +103,7 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         List<Document> seeds = new ArrayList<>();
         seeds.addAll(curatedFaqDocuments());
         seeds.addAll(loadKbJsonDocuments());
-        seeds.addAll(loadSrsKnowledgeDocuments());
+//        seeds.addAll(loadSrsKnowledgeDocuments());
 
         if (seeds.isEmpty()) {
             log.warn(
@@ -113,7 +115,9 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         log.info("KB seeded with {} document(s) (curated FAQ + KB JSON + SRS) (VectorStore.add)", seeds.size());
     }
 
-    /** Short, customer-tested answers; category is not {@code SRS} so retrieval can prefer these over raw PDF chunks. */
+    /**
+     * Short, customer-tested answers; category is not {@code SRS} so retrieval can prefer these over raw PDF chunks.
+     */
     private static List<Document> curatedFaqDocuments() {
         return Arrays.asList(
                 kb("Welcome to Bahrain Small Ship Registry Portal (SSRP). I can guide you with vessel registration. You can register a Boat, Jet Ski, or Dhow.",
@@ -205,8 +209,8 @@ public class KnowledgeBaseSeedRunner implements CommandLineRunner {
         }
 
         List<Document> out = new ArrayList<>();
-        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationServicesJsonClasspath, "vessel-registration-3-services-kb-text-category-source.json"));
-        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationValidationsJsonClasspath, "vessel-registration-validations-kb-format.json"));
+//        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationServicesJsonClasspath, "vessel-registration-3-services-kb-text-category-source.json"));
+//        out.addAll(loadKbJsonArrayDocuments(vesselRegistrationValidationsJsonClasspath, "vessel-registration-validations-kb-format.json"));
         out.addAll(loadOfficerKbJsonDocuments());
         return out;
     }
