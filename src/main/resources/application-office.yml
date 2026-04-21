@@ -1,0 +1,8 @@
+#################################### Profile: office - office network MongoDB ##########################################
+# Default active profile when built with: mvn -Poffice ...  (see pom.xml)
+# Or at runtime: --spring.profiles.active=office  (combine with others, e.g. dev,office — later profiles override)
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://hashan:hshanjaya@192.168.9.178:27017/report_db_dev?authSource=admin

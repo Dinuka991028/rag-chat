@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
-		<!-- Filtered into application.yml as spring.profiles.active (Maven profile: -Pdev | -Ponsite | -Pprod) -->
+		<!-- Filtered into application.yml as spring.profiles.active (Maven profile: -Pdev | -Ponsite | -Pprod | -Poffice) -->
 		<activatedProperties>dev</activatedProperties>
 	</properties>
 	<dependencyManagement>
@@ -117,6 +117,12 @@
 			<id>prod</id>
 			<properties>
 				<activatedProperties>prod</activatedProperties>
+			</properties>
+		</profile>
+		<profile>
+			<id>office</id>
+			<properties>
+				<activatedProperties>office</activatedProperties>
 			</properties>
 		</profile>
 	</profiles>
